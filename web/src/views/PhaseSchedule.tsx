@@ -11,11 +11,11 @@ const pct = (t: number) => `${((t - DAY_START) / (DAY_END - DAY_START)) * 100}%`
 type Edge = 'start' | 'end';
 type Drag = { id: string; key: string; edge: Edge; t: number };
 
-/** `keepLength`: moving the start shifts the end too, so the phase keeps its length. */
-function withTime(p: Phase, key: string, edge: Edge, t: number, keepLength = false): Phase {
+/** Moving the start shifts the whole phase (same length); moving the end changes its length. */
+function withTime(p: Phase, key: string, edge: Edge, t: number): Phase {
   const cur = phaseTimes(p, key);
   const next = edge === 'start'
-    ? { start: t, end: keepLength ? Math.min(DAY_END, Math.max(t + 15, t + cur.end - cur.start)) : Math.max(cur.end, t + 15) }
+    ? { start: t, end: Math.min(DAY_END, Math.max(t + 15, t + cur.end - cur.start)) }
     : { end: t, start: Math.min(cur.start, t - 15) };
   const legacy = key === 'ext' ? { start: next.start, end: next.end } : key === 'int' ? { intStart: next.start, intEnd: next.end } : {};
   return { ...p, ...legacy, times: { ...p.times, [key]: next } };
@@ -29,9 +29,9 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
   const sched = draft?.scheds ?? state.config.phaseSchedules ?? [];
   const align = (draft ? draft.align : state.config.alignSchedule) ?? sched[0]?.key;
 
-  const setTime = (id: string, key: string, edge: Edge, t: number, keepLength = false) => {
-    if (draft) setDraft({ ...draft, phases: draft.phases.map((p) => (p.id === id ? withTime(p, key, edge, t, keepLength) : p)) });
-    else update((d) => { d.phases = d.phases.map((p) => (p.id === id ? withTime(p, key, edge, t, keepLength) : p)); applyPhaseRefs(d); });
+  const setTime = (id: string, key: string, edge: Edge, t: number) => {
+    if (draft) setDraft({ ...draft, phases: draft.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)) });
+    else update((d) => { d.phases = d.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)); applyPhaseRefs(d); });
   };
   const setPhase = (id: string, patch: Partial<Phase>) => setDraft((d) => d && { ...d, phases: d.phases.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   const setScheds = (scheds: Sched[]) => {
@@ -111,11 +111,11 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
               const open = pop?.id === p.id && pop.key === s.key;
               return [
                 <div key={p.id} className="ptl-block" style={{ left: pct(start), width: `calc(${pct(end)} - ${pct(start)})`, background: p.color, color: textColor(p.color) }}
-                  title={`${p.name}\n${fmtTime(start)}–${fmtTime(end)}\nClick to edit times, or drag either end`}
+                  title={`${p.name}\n${fmtTime(start)}–${fmtTime(end)}\nClick to edit times; drag the left edge to move, the right edge to resize`}
                   onClick={() => setPop(open ? null : { id: p.id, key: s.key })}>
                   <b>{p.name}</b><small>{fmtTime(start)}–{fmtTime(end)}</small>
                   {(['start', 'end'] as const).map((edge) => (
-                    <span key={edge} className={`ptl-h ptl-h-${edge}`} title={`Drag to change the ${edge} time`}
+                    <span key={edge} className={`ptl-h ptl-h-${edge}`} title={edge === 'start' ? 'Drag to move the phase' : 'Drag to change the end time'}
                       onClick={(e) => e.stopPropagation()}
                       onPointerDown={(e) => startDrag(e, p.id, s.key, edge, edge === 'start' ? start : end)}
                       onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)} />
@@ -124,7 +124,7 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
                 open && (
                   <div key={`${p.id}-pop`} className="ptl-pop" style={{ left: pct(start) }}>
                     <b>{p.name}</b> ({s.name})
-                    <label>Start <TimeSelect value={start} onChange={(v) => setTime(p.id, s.key, 'start', v, true)} /></label>
+                    <label>Start <TimeSelect value={start} onChange={(v) => setTime(p.id, s.key, 'start', v)} /></label>
                     <label>End <TimeSelect includeEnd value={end} onChange={(v) => setTime(p.id, s.key, 'end', v)} /></label>
                     <button onClick={() => setPop(null)}>Done</button>
                   </div>
