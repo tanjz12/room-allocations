@@ -37,7 +37,7 @@ export default function ColorPicker({ value, onChange, existing = [], title = 'C
   }, [open, place]);
   const toggle = () => {
     if (open) { setOpen(false); return; }
-    setText(value); setSugg(suggestColors(existing, 9)); place(); setOpen(true);
+    setText(value); setSugg(suggestColors(existing, 4)); place(); setOpen(true);
   };
   const pick = (c: string) => { onChange(c); setText(c); };
   return <>
@@ -55,7 +55,7 @@ export default function ColorPicker({ value, onChange, existing = [], title = 'C
             <input type="color" aria-label="More colors" value={normalizeColor(value) ?? '#000000'} onChange={(e) => pick(e.target.value)} /></label>
         </div>
         <div className="color-sugg-label">Suggested
-          <span><button type="button" className="color-shuffle" title="Show other suggestions" aria-label="Show other suggestions" onClick={() => setSugg(suggestColors(existing, 9))}>↻</button>
+          <span><button type="button" className="color-shuffle" title="Show other suggestions" aria-label="Show other suggestions" onClick={() => setSugg(suggestColors(existing, 4))}>↻</button>
             <button type="button" className="color-close" aria-label="Close" onClick={() => setOpen(false)}>✕</button></span>
         </div>
         <div className="color-grid">
