@@ -177,7 +177,15 @@ tr.inactive td, tr.inactive td b { color: #999; }
 
 .more-menu { position: relative; }
 .more-menu > summary::-webkit-details-marker { display: none; }
-.more-menu .menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: #fff; border: 1px solid #c8d0d6; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); white-space: nowrap; }
+.more-menu .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; display: flex; flex-direction: column; min-width: 220px; padding: 6px; background: #fff; border: 1px solid #e2e6ea; border-radius: 10px; box-shadow: 0 10px 28px rgba(15,40,60,.18); white-space: nowrap; }
+.more-menu .menu > button { width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: #1d1d22; text-align: left; font-size: 13px; }
+.more-menu .menu > button:hover:not(:disabled) { background: #eaf6f4; filter: none; }
+.more-menu .menu > button.danger { color: #b3261e; }
+.more-menu .menu > button.danger:hover { background: #fdecea; }
+.more-menu .menu .confirm-box { display: block; padding: 4px 6px; }
+.more-menu .menu .confirm-in { width: 100%; padding: 6px 8px; }
+.menu-sep { border: 0; border-top: 1px solid #e8ebee; margin: 4px 6px; }
+.menu-sub { display: block; font-size: 11px; color: #6b7280; }
 .loading { max-width: 360px; margin: 120px auto; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
 .legend-rows { flex-direction: column; }
 .legend-row, .legend-contents { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
@@ -254,10 +262,19 @@ h1.title { cursor: text; }
 .more-menu[open] > summary { background: rgba(255,255,255,.32); }
 .hdr-btn.signin { background: #fff; color: var(--bmt-teal-dark); border-color: #fff; }
 .hdr-btn.signin:hover:not(:disabled) { background: #eefaf8; }
+.signin .short { display: none; }
+.data-actions > button, .data-actions > .confirm-box + button { height: 30px; padding: 0 14px; border: 1px solid rgba(255,255,255,.8); border-radius: 15px; background: rgba(255,255,255,.14); color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.data-actions > button:hover:not(:disabled) { background: rgba(255,255,255,.28); filter: none; }
+.data-actions > button.primary { background: #fff; color: var(--bmt-teal-dark); border-color: #fff; }
+.data-actions > button.primary:hover:not(:disabled) { background: #eefaf8; }
 @media (max-width: 600px) {
   header { padding: 8px 12px 6px; gap: 6px 8px; }
   header h1 { font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .gsi-privacy, .signin .long { display: none; }
+  .signin .short { display: inline; }
+}
+@media (max-width: 360px) {
+  .signin .xs-hide { display: none; }
   .hdr-btn, .more-menu > summary { padding: 0 12px; }
   .data-actions { flex-wrap: wrap; justify-content: flex-end; }
   .drive-status { flex-basis: 100%; max-width: none; }

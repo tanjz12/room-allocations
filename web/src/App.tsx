@@ -126,7 +126,7 @@ export default function App() {
   const openButton = (inMenu: boolean) => !account && !inMenu
     ? <>
         <button className="hdr-btn signin" disabled={!!drive.busy} title="Sign in with Google; then click Open from Drive… to pick a data package" onClick={() => { setLoadErr(''); void openFromDrive(); }}>
-          Sign in<span className="long"> with Google</span>
+          <span className="long">Sign in with Google</span><span className="short">Google Drive<span className="xs-hide"> Sign in</span></span>
         </button>
         <a className="gsi-privacy" href="#privacy">Privacy</a>
       </>
@@ -179,8 +179,10 @@ export default function App() {
               {linked && openButton(true)}
               <button onClick={() => { setLoadErr(''); fileRef.current?.click(); }}>Open data package…</button>
               <button onClick={() => void exportPackage()}>Export data package</button>
-              <ConfirmButton label="Clear all data" word="clear" className="" onConfirm={clearAll} />
-              {account && <button title={`Signed in to Drive as ${account}`} onClick={() => { signOutDrive(); setAccount(''); }}>Sign out of Google ({account})</button>}
+              <hr className="menu-sep" />
+              <ConfirmButton label="Clear all data" word="clear" className="danger" onConfirm={clearAll} />
+              <hr className="menu-sep" />
+              {account && <button title={`Signed in to Drive as ${account}`} onClick={() => { signOutDrive(); setAccount(''); }}>Sign out of Google<small className="menu-sub">{account}</small></button>}
               <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); location.hash = '#privacy'; }}>Privacy</button>
             </div>
           </details>
