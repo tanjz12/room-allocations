@@ -172,8 +172,8 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="event">event</option><option value="category">tag</option></select></label>
         <label>Show <select value={show} onChange={(e) => setShow(e.target.value)}>
           <option value="app">All Events</option>
-          {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}
-          {hl && <option value="focus">{hl.label}</option>}</select></label>
+          {hl && <option value="focus">{hl.label}</option>}
+          {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}</select></label>
         <button onClick={() => window.print()}>Print</button>
         <button onClick={downloadPdf} disabled={busy}>{busy ? 'Making PDF…' : 'Download PDF'}</button>
       </div>
