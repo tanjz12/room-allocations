@@ -251,7 +251,6 @@ textarea.sign-name { resize: vertical; font: inherit; width: 100%; min-height: 1
 .gsi-btn:disabled { opacity: .6; cursor: default; }
 .gsi-privacy { font-size: 12px; color: #fff; }
 
-.title-prefix { cursor: text; border-radius: 4px; }
-.title-prefix:hover { background: rgba(255,255,255,0.2); }
-.title-prefix.empty { opacity: 0.6; font-style: italic; }
-.title-input { font: inherit; color: inherit; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.7); border-radius: 4px; padding: 0 4px; }
+h1.title { cursor: text; }
+.title-prefix { display: inline-block; min-width: 1px; outline: none; }
+.title-prefix.has { margin-right: 0.3em; }

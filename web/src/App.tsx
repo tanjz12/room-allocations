@@ -63,11 +63,27 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const title = state.config.title || DEFAULT_TITLE;
   const titlePrefix = title.endsWith(DEFAULT_TITLE) ? title.slice(0, -DEFAULT_TITLE.length).trim() : title;
-  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const prefixRef = useRef<HTMLSpanElement>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  useEffect(() => { const el = prefixRef.current; if (el && document.activeElement !== el) el.textContent = titlePrefix; }, [titlePrefix]);
   const saveTitle = () => {
-    const v = (titleDraft ?? '').trim();
-    setTitleDraft(null);
+    const el = prefixRef.current;
+    if (!el) return;
+    const v = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    el.textContent = v;
+    setEditingTitle(false);
     if (v !== titlePrefix) edit((d) => { d.config.title = v ? `${v} ${DEFAULT_TITLE}` : DEFAULT_TITLE; });
+  };
+  const focusTitle = () => {
+    const el = prefixRef.current;
+    if (!el || document.activeElement === el) return;
+    el.focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(false);
+    const sel = getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(r);
   };
   useEffect(() => { document.title = title; }, [title]);
 
@@ -122,13 +138,15 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>
-          {titleDraft === null
-            ? <span className={`title-prefix${titlePrefix ? '' : ' empty'}`} title="Click to edit" onClick={() => setTitleDraft(titlePrefix)}>{titlePrefix || 'Add name'}</span>
-            : <input className="title-input" autoFocus value={titleDraft} size={Math.max(titleDraft.length, 8)} placeholder="Name"
-                onChange={(e) => setTitleDraft(e.target.value)} onBlur={saveTitle}
-                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setTitleDraft(null); }} />}
-          {' '}{DEFAULT_TITLE}
+        <h1 className="title" title="Click to type a name in front" onClick={focusTitle}>
+          <span ref={prefixRef} className={`title-prefix${titlePrefix || editingTitle ? ' has' : ''}`} contentEditable suppressContentEditableWarning spellCheck={false}
+            onFocus={() => setEditingTitle(true)} onBlur={saveTitle}
+            onPaste={(e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+              if (e.key === 'Escape') { e.currentTarget.textContent = titlePrefix; e.currentTarget.blur(); }
+            }} />
+          {DEFAULT_TITLE}
         </h1>
         <nav>
           {TABS.map((t) => (
