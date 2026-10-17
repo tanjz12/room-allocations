@@ -11,9 +11,12 @@ const pct = (t: number) => `${((t - DAY_START) / (DAY_END - DAY_START)) * 100}%`
 type Edge = 'start' | 'end';
 type Drag = { id: string; key: string; edge: Edge; t: number };
 
-function withTime(p: Phase, key: string, edge: Edge, t: number): Phase {
+/** `keepLength`: moving the start shifts the end too, so the phase keeps its length. */
+function withTime(p: Phase, key: string, edge: Edge, t: number, keepLength = false): Phase {
   const cur = phaseTimes(p, key);
-  const next = edge === 'start' ? { start: t, end: Math.max(cur.end, t + 15) } : { end: t, start: Math.min(cur.start, t - 15) };
+  const next = edge === 'start'
+    ? { start: t, end: keepLength ? Math.min(DAY_END, Math.max(t + 15, t + cur.end - cur.start)) : Math.max(cur.end, t + 15) }
+    : { end: t, start: Math.min(cur.start, t - 15) };
   const legacy = key === 'ext' ? { start: next.start, end: next.end } : key === 'int' ? { intStart: next.start, intEnd: next.end } : {};
   return { ...p, ...legacy, times: { ...p.times, [key]: next } };
 }
@@ -26,9 +29,9 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
   const sched = draft?.scheds ?? state.config.phaseSchedules ?? [];
   const align = (draft ? draft.align : state.config.alignSchedule) ?? sched[0]?.key;
 
-  const setTime = (id: string, key: string, edge: Edge, t: number) => {
-    if (draft) setDraft({ ...draft, phases: draft.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)) });
-    else update((d) => { d.phases = d.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)); applyPhaseRefs(d); });
+  const setTime = (id: string, key: string, edge: Edge, t: number, keepLength = false) => {
+    if (draft) setDraft({ ...draft, phases: draft.phases.map((p) => (p.id === id ? withTime(p, key, edge, t, keepLength) : p)) });
+    else update((d) => { d.phases = d.phases.map((p) => (p.id === id ? withTime(p, key, edge, t, keepLength) : p)); applyPhaseRefs(d); });
   };
   const setPhase = (id: string, patch: Partial<Phase>) => setDraft((d) => d && { ...d, phases: d.phases.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   const setScheds = (scheds: Sched[]) => {
@@ -86,7 +89,7 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
         <div className="ptl-axis">
           <div className="ptl-label" />
           <div className="ptl-track">{HOURS.map((t) => <span key={t} style={{ left: pct(t) }}>{fmtTime(t).replace(':00', '')}</span>)}</div>
-          <div className="ptl-align" title="Event start/end times linked to a phase follow the selected schedule">Use for Room Schedule</div>
+          <div className="ptl-align" title="Event start/end times linked to a phase follow the selected schedule">Align event blocks to</div>
         </div>
       )}
       {sched.map((s) => (
@@ -121,7 +124,7 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
                 open && (
                   <div key={`${p.id}-pop`} className="ptl-pop" style={{ left: pct(start) }}>
                     <b>{p.name}</b> ({s.name})
-                    <label>Start <TimeSelect value={start} onChange={(v) => setTime(p.id, s.key, 'start', v)} /></label>
+                    <label>Start <TimeSelect value={start} onChange={(v) => setTime(p.id, s.key, 'start', v, true)} /></label>
                     <label>End <TimeSelect includeEnd value={end} onChange={(v) => setTime(p.id, s.key, 'end', v)} /></label>
                     <button onClick={() => setPop(null)}>Done</button>
                   </div>
@@ -131,8 +134,8 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
           </div>
           <div className="ptl-align">
             <input type="radio" name="align-sched" checked={align === s.key} disabled={!draft}
-              aria-label={`Use ${s.name} for Room Schedule`}
-              title={draft ? `Event start/end times linked to a phase follow ${s.name}` : 'Click Edit to change which schedule the Room Schedule uses'}
+              aria-label={`Align event blocks to ${s.name}`}
+              title={draft ? `Event start/end times linked to a phase follow ${s.name}` : 'Click Edit to change which schedule event blocks align to'}
               onChange={() => setDraft((d) => d && { ...d, align: s.key })} />
           </div>
         </div>
@@ -161,7 +164,12 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
               ))}
             </tbody>
           </table>
-          <button onClick={() => setDraft({ ...draft, phases: [...draft.phases, { id: uid('p'), name: 'New phase', color: defaultColor(state, draft.phases.map((p) => p.color)), start: DAY_START + 60, end: DAY_START + 120, intStart: DAY_START + 60, intEnd: DAY_START + 120 }] })}>+ Add phase</button>
+          <button onClick={() => {
+            const start = Math.min(DAY_END - 15, Math.max(DAY_START + 60, ...draft.phases.map((p) => phaseTimes(p, align ?? 'ext').end)));
+            const end = Math.min(DAY_END, start + 60);
+            const times = Object.fromEntries(sched.map((x) => [x.key, { start, end }]));
+            setDraft({ ...draft, phases: [...draft.phases, { id: uid('p'), name: 'New phase', color: defaultColor(state, draft.phases.map((p) => p.color)), start, end, intStart: start, intEnd: end, times }] });
+          }}>+ Add phase</button>
         </>
       )}
     </div>
