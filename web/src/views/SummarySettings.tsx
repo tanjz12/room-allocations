@@ -78,21 +78,8 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
   const groups = [...new Set([...(state.config.eventGroups ?? []), ...state.events.map((e) => e.group).filter(Boolean)])];
   const capTypes = state.capTypes;
   const P = state.config.proctors;
-  const [draft, setDraft] = useState<ProctorPill | null>(null);
-  const saved = draft && P?.pills.find((x) => x.id === draft.id);
-  const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
-  const setD = (f: (d: ProctorPill) => void) => setDraft((d) => { if (!d) return d; const n = structuredClone(d); f(n); return n; });
-  const leave = () => !dirty || confirm('Discard unsaved changes to this pill?');
-  const openPillEdit = (pill: ProctorPill) => { if (leave()) setDraft(structuredClone(pill)); };
-  const savePill = () => {
-    if (!draft) return;
-    const ok = new Set(state.events.map((e) => e.id));
-    const d = structuredClone(draft);
-    d.excludeIds = d.excludeIds.filter((id) => ok.has(id));
-    d.lines.forEach((l) => { l.eventIds = l.eventIds.filter((id) => ok.has(id)); });
-    setP((p) => { const i = p.pills.findIndex((x) => x.id === d.id); if (i >= 0) p.pills[i] = d; });
-    setDraft(null);
-  };
+  const [openId, setOpenId] = useState('');
+  const openPill = P?.pills.find((x) => x.id === openId)?.id;
   const listedName = P?.listed.length ? P.listed.map((m) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value).join(', ') : 'listed rooms';
   const setP = (f: (p: Proctors) => void) => update((d) => { if (d.config.proctors) f(d.config.proctors); });
   const boundSelect = (b: PillBound | undefined, side: 'from' | 'to', set: (b?: PillBound) => void) => {
@@ -174,47 +161,44 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
           <div className="muted small">Rooms matching any of these each get their own editable proctor count.</div></td></tr>
         <tr><th>Pills</th><td>
           {P.pills.map((pill, pi) => (
-            pill.id !== draft?.id || !draft ? (
+            pill.id !== openPill ? (
             <div key={pill.id} className="pill-edit collapsed">
-              <div><b>{pill.name || 'Untitled pill'}</b>{' '}
+              <div><button className="pill-toggle" title="Edit" aria-label="Expand pill" onClick={() => setOpenId(pill.id)}>▸</button>
+                {' '}<b>{pill.name || 'Untitled pill'}</b>{' '}
                 <span className="muted small">{pill.group || '—'} events{pill.from || pill.to ? ', part of the day' : ', whole day'}{pill.lines.some((l) => l.label) ? ` · ${pill.lines.map((l) => l.label).filter(Boolean).join(', ')}` : ''}</span>
-                {' '}<button onClick={() => openPillEdit(pill)}>Edit</button></div>
+                {' '}<button onClick={() => setOpenId(pill.id)}>Edit</button></div>
             </div>
             ) : (
-            <div key={draft.id} className="pill-edit">
-              <div><input value={draft.name} title="Pill name" onChange={(e) => setD((d) => { d.name = e.target.value; })} />
-                {' '}from {boundSelect(draft.from, 'from', (b) => setD((d) => { if (b) d.from = b; else delete d.from; }))}
-                {' '}to {boundSelect(draft.to, 'to', (b) => setD((d) => { if (b) d.to = b; else delete d.to; }))}
-                {' '}<ConfirmButton label="Delete pill" onConfirm={() => { setP((p) => { p.pills.splice(pi, 1); }); setDraft(null); }} /></div>
-              <div className="pill-line">counts <select value={draft.group} title="Event group this pill counts" onChange={(e) => setD((d) => { d.group = e.target.value; })}>
-                {[...new Set([draft.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}</select> events
-                {' '}leaving out <EventChips state={state} ids={draft.excludeIds} pool={state.events.filter((e) => e.group === draft.group).map((e) => e.id)}
-                  onChange={(ids) => setD((d) => { d.excludeIds = ids; })} /></div>
-              {draft.lines.map((l, li) => (
+            <div key={pill.id} className="pill-edit">
+              <div><button className="pill-toggle" title="Collapse" aria-label="Collapse pill" onClick={() => setOpenId('')}>▾</button>
+                {' '}<input value={pill.name} title="Pill name" onChange={(e) => setP((p) => { p.pills[pi].name = e.target.value; })} />
+                {' '}from {boundSelect(pill.from, 'from', (b) => setP((p) => { if (b) p.pills[pi].from = b; else delete p.pills[pi].from; }))}
+                {' '}to {boundSelect(pill.to, 'to', (b) => setP((p) => { if (b) p.pills[pi].to = b; else delete p.pills[pi].to; }))}
+                {' '}<ConfirmButton label="Delete pill" onConfirm={() => setP((p) => { p.pills.splice(pi, 1); })} /></div>
+              <div className="pill-line">counts <select value={pill.group} title="Event group this pill counts" onChange={(e) => setP((p) => { p.pills[pi].group = e.target.value; })}>
+                {[...new Set([pill.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}</select> events
+                {' '}leaving out <EventChips state={state} ids={pill.excludeIds} pool={state.events.filter((e) => e.group === pill.group).map((e) => e.id)}
+                  onChange={(ids) => setP((p) => { p.pills[pi].excludeIds = ids; })} /></div>
+              {pill.lines.map((l, li) => (
                 <div key={li} className="pill-line">
-                  <input value={l.label} placeholder="Line label" title="Line label (can be blank)" onChange={(e) => setD((d) => { d.lines[li].label = e.target.value; })} />
-                  {' '}<select value={l.rooms ?? ''} title="Which rooms this line counts" onChange={(e) => setD((d) => {
-                    const x = d.lines[li]; const v = e.target.value as 'listed' | 'others' | '';
+                  <input value={l.label} placeholder="Line label" title="Line label (can be blank)" onChange={(e) => setP((p) => { p.pills[pi].lines[li].label = e.target.value; })} />
+                  {' '}<select value={l.rooms ?? ''} title="Which rooms this line counts" onChange={(e) => setP((p) => {
+                    const x = p.pills[pi].lines[li]; const v = e.target.value as 'listed' | 'others' | '';
                     if (v) x.rooms = v; else delete x.rooms;
                   })}>
                     <option value="">all rooms</option>
                     <option value="others" disabled={!P.listed.length}>all but {listedName}</option>
                     <option value="listed" disabled={!P.listed.length}>only {listedName}</option>
                   </select>
-                  {' '}with <EventChips state={state} ids={l.eventIds} onChange={(ids) => setD((d) => { d.lines[li].eventIds = ids; })} />
+                  {' '}with <EventChips state={state} ids={l.eventIds} onChange={(ids) => setP((p) => { p.pills[pi].lines[li].eventIds = ids; })} />
                   {!l.eventIds.length && <span className="muted small"> rooms at the pill's busiest slot</span>}
-                  <button className="chip-x" title="Remove line" onClick={() => setD((d) => { d.lines.splice(li, 1); })}>×</button>
+                  <button className="chip-x" title="Remove line" onClick={() => setP((p) => { p.pills[pi].lines.splice(li, 1); })}>×</button>
                 </div>
               ))}
-              <button onClick={() => setD((d) => { d.lines.push({ label: '', eventIds: [] }); })}>+ Add line</button>
-              <div className="pill-actions">
-                <button className="primary" disabled={!dirty} onClick={savePill}>Save</button>
-                {' '}<button onClick={() => { if (leave()) setDraft(null); }}>Collapse</button>
-                {dirty && <span className="muted small"> Unsaved changes</span>}
-              </div>
+              <button onClick={() => setP((p) => { p.pills[pi].lines.push({ label: '', eventIds: [] }); })}>+ Add line</button>
             </div>
           )))}
-          <button onClick={() => { const np = newPill(`Proctors ${P.pills.length + 1}`, P.pills.at(-1)?.group ?? groups[0] ?? ''); if (!leave()) return; setP((p) => { p.pills.push(np); }); setDraft(structuredClone(np)); }}>+ Add pill</button>
+          <button onClick={() => { const np = newPill(`Proctors ${P.pills.length + 1}`, P.pills.at(-1)?.group ?? groups[0] ?? ''); setP((p) => { p.pills.push(np); }); setOpenId(np.id); }}>+ Add pill</button>
           <p className="muted small">Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</p>
         </td></tr>
         <tr><th>Note</th><td><textarea rows={2} value={P.note ?? ''} onChange={(e) => setP((p) => { if (e.target.value) p.note = e.target.value; else delete p.note; })} /></td></tr>
