@@ -5,7 +5,36 @@ import { ConfirmButton, type ViewProps } from './common';
 
 const newPill = (name: string, group: string): ProctorPill => ({ id: uid('pill'), name, group, excludeIds: [], lines: [{ label: '', eventIds: [] }] });
 
-/** Chips for a list of event ids, with × to remove and a + select to add. */
+type Suggestion = { key: string; label: string; hint?: string };
+
+/** Small text box: typing shows up to 8 matching suggestions to pick (click, or arrows + Enter). */
+function SuggestAdd({ options, onPick, placeholder, label }: { options: Suggestion[]; onPick: (key: string) => void; placeholder: string; label: string }) {
+  const [q, setQ] = useState('');
+  const [hi, setHi] = useState(0);
+  const needle = q.trim().toLowerCase();
+  const starts = (o: Suggestion) => +!o.label.toLowerCase().startsWith(needle);
+  const matches = needle ? options.filter((o) => o.label.toLowerCase().includes(needle)).sort((x, y) => starts(x) - starts(y)).slice(0, 8) : [];
+  const pick = (o: Suggestion) => { onPick(o.key); setQ(''); setHi(0); };
+  return (
+    <span className="suggest">
+      <input value={q} placeholder={placeholder} aria-label={label} onChange={(e) => { setQ(e.target.value); setHi(0); }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter' && matches[hi]) { e.preventDefault(); pick(matches[hi]); }
+          else if (e.key === 'Escape') setQ('');
+        }} />
+      {needle && <span className="suggest-list" role="listbox">
+        {matches.length ? matches.map((o, i) => (
+          <button key={o.key} role="option" aria-selected={i === hi} className={i === hi ? 'on' : ''}
+            onMouseDown={(e) => { e.preventDefault(); pick(o); }}><span className="lbl">{o.label}</span>{o.hint && <span className="muted small"> {o.hint}</span>}</button>
+        )) : <span className="muted small">No matches</span>}
+      </span>}
+    </span>
+  );
+}
+
+/** Chips for a list of event ids, with × to remove and a type-to-search box to add. */
 function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[]; onChange: (ids: string[]) => void; pool?: string[] }) {
   const name = (id: string) => state.events.find((e) => e.id === id)?.name ?? id;
   const free = state.events.filter((e) => !ids.includes(e.id) && (!pool || pool.includes(e.id)));
@@ -15,10 +44,8 @@ function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[
         <span key={id} className="chip tag-chip">{name(id)}
           <button className="chip-x" title={`Remove ${name(id)}`} onClick={() => onChange(ids.filter((x) => x !== id))}>×</button></span>
       ))}
-      {free.length > 0 && <select className="tag-add" title="Add event" value="" onChange={(e) => e.target.value && onChange([...ids, e.target.value])}>
-        <option value="" hidden>+</option>
-        {free.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>}
+      {free.length > 0 && <SuggestAdd placeholder="+ type an event" label="Add event" onPick={(id) => onChange([...ids, id])}
+        options={free.map((e) => ({ key: e.id, label: e.name, hint: e.group || undefined }))} />}
     </span>
   );
 }
@@ -27,41 +54,22 @@ const FIELD_NAMES: Record<RoomMatch['field'], string> = { type: 'room type', bui
 
 /** Chips for room matches; type in the box to see matching room types, buildings, statuses and room names. */
 function RoomChips({ state, value, onChange }: { state: State; value: RoomMatch[]; onChange: (v: RoomMatch[]) => void }) {
-  const [q, setQ] = useState('');
-  const [hi, setHi] = useState(0);
   const label = (m: RoomMatch) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value;
-  const all: RoomMatch[] = [];
-  const seen = new Set<string>();
-  const add = (m: RoomMatch) => { const k = m.field + '\0' + m.value; if (m.value && !seen.has(k)) { seen.add(k); all.push(m); } };
+  const key = (m: RoomMatch) => m.field + '\0' + m.value;
+  const all = new Map<string, RoomMatch>();
+  const add = (m: RoomMatch) => { if (m.value && !value.some((v) => key(v) === key(m))) all.set(key(m), m); };
   for (const r of state.rooms) { add({ field: 'type', value: baseType(r.type) }); add({ field: 'type', value: r.type }); }
   for (const r of state.rooms) add({ field: 'building', value: r.building });
   for (const r of state.rooms) add({ field: 'status', value: r.status ?? '' });
   for (const r of state.rooms) add({ field: 'room', value: r.id });
-  const needle = q.trim().toLowerCase();
-  const matches = needle ? all.filter((m) => !value.some((v) => v.field === m.field && v.value === m.value) && label(m).toLowerCase().includes(needle))
-    .sort((a, b) => +!label(a).toLowerCase().startsWith(needle) - +!label(b).toLowerCase().startsWith(needle)).slice(0, 8) : [];
-  const pick = (m: RoomMatch) => { onChange([...value, m]); setQ(''); setHi(0); };
   return (
     <span className="tags-cell room-chips">
       {value.map((m, i) => (
         <span key={i} className="chip tag-chip" title={FIELD_NAMES[m.field]}>{label(m)}<span className="muted small">&nbsp;{FIELD_NAMES[m.field]}</span>
           <button className="chip-x" title={`Remove ${label(m)}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button></span>
       ))}
-      <span className="suggest">
-        <input value={q} placeholder="+ type to add" aria-label="Add room type, building, status or room" onChange={(e) => { setQ(e.target.value); setHi(0); }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
-            else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-            else if (e.key === 'Enter' && matches[hi]) { e.preventDefault(); pick(matches[hi]); }
-            else if (e.key === 'Escape') setQ('');
-          }} />
-        {needle && <span className="suggest-list" role="listbox">
-          {matches.length ? matches.map((m, i) => (
-            <button key={m.field + m.value} role="option" aria-selected={i === hi} className={i === hi ? 'on' : ''}
-              onMouseDown={(e) => { e.preventDefault(); pick(m); }}>{label(m)} <span className="muted small">{FIELD_NAMES[m.field]}</span></button>
-          )) : <span className="muted small">No matches</span>}
-        </span>}
-      </span>
+      <SuggestAdd placeholder="+ type to add" label="Add room type, building, status or room" onPick={(k) => onChange([...value, all.get(k)!])}
+        options={[...all.values()].map((m) => ({ key: key(m), label: label(m), hint: FIELD_NAMES[m.field] }))} />
     </span>
   );
 }
