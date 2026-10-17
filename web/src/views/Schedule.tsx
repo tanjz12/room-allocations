@@ -105,7 +105,7 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
                       style={{ top: ((e.start - DAY_START) / SLOT) * ROW, height: ((e.end - e.start) / SLOT) * ROW - 1, background: e.color, color: textColor(e.color) }}
                       title={`${e.name}\n${fmtTime(e.start)}–${fmtTime(e.end)}\n${r.name}: ${cap ?? '—'} (${e.capacityType})`}
                       onClick={(ev) => { ev.stopPropagation(); if (!edit) setEdit({ blockId: b.id, text: b.signName ?? e.signName ?? e.name, room: !!b.signName }); }}>
-                      <span className="bname">{e.name}</span>
+                      <span className="bname">{(!e.signHide && (b.signName?.trim() || e.signName?.trim())) || e.name}</span>
                       {cap != null && <span className="bcap">Capacity {cap}</span>}
                       <button className="del" title="Remove from this room" onClick={(ev) => { ev.stopPropagation(); update((d) => { d.blocks = d.blocks.filter((x) => x.id !== b.id); }); }}>×</button>
                       {edit?.blockId === b.id && (

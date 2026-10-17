@@ -61,7 +61,7 @@ h2 { font-size: 15px; margin: 16px 0 8px; }
 .now { position: absolute; left: 0; right: 0; background: rgba(253,181,21,.25); pointer-events: none; }
 .block { position: absolute; left: 2px; right: 2px; border-radius: 3px; padding: 1px 3px; font-size: 10px; line-height: 12px; overflow: hidden; cursor: default; border: 1px solid rgba(0,0,0,.2); }
 .block.clash { outline: 2px solid #e00; }
-.bname { display: block; font-weight: 600; }
+.bname { display: block; font-weight: 600; white-space: pre-line; }
 .bcap { opacity: .8; }
 .del { position: absolute; top: 0; right: 0; display: none; padding: 0 4px; font-size: 12px; line-height: 14px; border-radius: 3px; }
 .block:hover .del { display: block; }
