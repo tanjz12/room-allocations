@@ -54,12 +54,9 @@ export default function ColorPicker({ value, onChange, existing = [], title = 'C
           <label className="color-more" title="Full color picker">More
             <input type="color" aria-label="More colors" value={normalizeColor(value) ?? '#000000'} onChange={(e) => pick(e.target.value)} /></label>
         </div>
-        <div className="color-sugg-label">Suggested
-          <span><button type="button" className="color-shuffle" title="Show other suggestions" aria-label="Show other suggestions" onClick={() => setSugg(suggestColors([...existing, value], 4))}>↻</button>
-            <button type="button" className="color-close" aria-label="Close" onClick={() => setOpen(false)}>✕</button></span>
-        </div>
         <div className="color-grid">
-          {sugg.map((c) => <button type="button" key={c} className={c === value.toLowerCase() ? 'color-cell on' : 'color-cell'} style={{ background: c }} title={c} aria-label={c} onClick={() => pick(c)} />)}
+          {sugg.map((c) => { const on = c === value.toLowerCase(); return <button type="button" key={c} className={on ? 'color-cell on' : 'color-cell'} style={{ background: c }} title={c} aria-label={c} aria-pressed={on} onClick={() => pick(c)}>{on && '✓'}</button>; })}
+          <button type="button" className="color-cell color-shuffle" title="Other colors" aria-label="Other colors" onClick={() => setSugg(suggestColors([...existing, value], 4))}>↻</button>
         </div>
       </div>
     </>, document.body)}
