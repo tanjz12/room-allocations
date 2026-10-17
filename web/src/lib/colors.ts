@@ -28,7 +28,6 @@ const fromHsl = (h: number, s: number, l: number) => {
   const c = (n: number) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)))).toString(16).padStart(2, '0');
   return `#${c(0)}${c(8)}${c(4)}`;
 };
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** Any CSS color (#abc, #aabbcc, names like "teal", rgb(...)) as #rrggbb, or null if it isn't one. */
 export function normalizeColor(v: string): string | null {
@@ -53,25 +52,41 @@ export function usedColors(s: State): string[] {
   return [...new Set(cs.filter(Boolean).map((c) => c.toLowerCase()))];
 }
 
-/** Colors around the typical saturation/lightness of `existing`, spread over the hue wheel and kept away from the existing colors. */
-export function suggestColors(existing: string[], n = 12): string[] {
-  const rgbs = existing.map(hexRgb).filter((x): x is RGB => !!x);
-  const styles = rgbs.map(hsl).filter(([, s]) => s > 0.12);
-  if (!styles.length) styles.push([0, 0.55, 0.62]);
-  const med = (k: number) => { const v = styles.map((x) => x[k]).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
-  const [s0, l0] = [med(1), med(2)];
-  const ref = rgbs.map(lab), out: { hex: string; lab: number[] }[] = [];
-  const offset = Math.random() * 360;
-  for (let k = 0; k < n; k++) {
-    let best: (typeof out)[number] | null = null, bestGap = -1;
-    for (let tries = 0; tries < 40 && bestGap < 14; tries++) {
-      const hex = fromHsl((offset + (k * 360) / n + (Math.random() - 0.5) * 24 + 360) % 360,
-        clamp(s0 + (Math.random() - 0.5) * 0.16, 0.15, 1), clamp(l0 + (Math.random() - 0.5) * 0.14, 0.25, 0.92));
-      const c = { hex, lab: lab(hexRgb(hex)!) };
-      const g = Math.min(Infinity, ...ref.map((r) => dist(r, c.lab)), ...out.map((o) => dist(o.lab, c.lab)));
-      if (g > bestGap) { bestGap = g; best = c; }
-    }
-    out.push(best!);
+// Light colors from Paper Heart Design's "Peaceful Palettes" (paperheartdesign.com/blog/color-palette-peaceful-palettes).
+const PRETTY = ['#86b9b0', '#8eaebb', '#afb4ad', '#b3cde4', '#bdd9cd', '#bed4e9', '#c4b3a9', '#ccb0be', '#cfcad1', '#d2e1cc', '#d6cfbf', '#d9ae8e',
+  '#d9d7c2', '#dac4d0', '#daeaf7', '#e2c58d', '#e7c8e7', '#f7a49e', '#f7c6c2', '#fdefc0', '#feb640', '#ffddba', '#ffdf7c'];
+const luminance = ([r, g, b]: RGB) => { const f = (c: number) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+/** Black text on it has at least 7:1 contrast. */
+const blackReadable = (hex: string) => luminance(hexRgb(hex)!) >= 0.3;
+
+/** Light, black-text-readable colors in the style of PRETTY (plus small hue shifts of them), kept away from `existing`, one hue family at a time. */
+export function suggestColors(existing: string[], n = 9): string[] {
+  const ref = existing.map(hexRgb).filter((x): x is RGB => !!x).map(lab);
+  const pool = [...new Set(PRETTY.flatMap((c) => {
+    const [h, s, l] = hsl(hexRgb(c)!);
+    return [c, ...[-16, -8, 8, 16].map((d) => {
+      let L = l, out = fromHsl((h + d + 360) % 360, s, L);
+      while (!blackReadable(out) && L < 0.95) out = fromHsl((h + d + 360) % 360, s, (L += 0.02));
+      return out;
+    })];
+  }))].filter(blackReadable).map((hex) => ({ hex, lab: lab(hexRgb(hex)!) }));
+  const gap = (c: (typeof pool)[number]) => Math.min(Infinity, ...ref.map((r) => dist(r, c.lab)));
+  let cands = pool;
+  for (const t of [10, 6, 3, 0]) { cands = pool.filter((c) => gap(c) >= t); if (cands.length >= n * 3) break; }
+  const buckets = new Map<number, typeof pool>();
+  for (const c of cands) {
+    const [h, sat] = hsl(hexRgb(c.hex)!);
+    const k = sat < 0.15 ? -1 : Math.floor(h / 30);
+    buckets.set(k, [...(buckets.get(k) ?? []), c]);
   }
+  const groups = [...buckets.values()].sort(() => Math.random() - 0.5);
+  const out: typeof pool = [];
+  const far = (c: (typeof pool)[number]) => Math.min(Infinity, ...out.map((x) => dist(x.lab, c.lab)));
+  for (let round = 0; out.length < n && round < 6; round++)
+    for (const g of groups) {
+      if (out.length >= n || !g.length) continue;
+      const i = round ? g.reduce((b, c, k) => (far(c) > far(g[b]) ? k : b), 0) : Math.floor(Math.random() * g.length);
+      if (far(g[i]) >= 10) out.push(...g.splice(i, 1));
+    }
   return out.map((c) => c.hex).sort((a, b) => hsl(hexRgb(a)!)[0] - hsl(hexRgb(b)!)[0]);
 }

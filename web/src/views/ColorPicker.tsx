@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { normalizeColor, suggestColors } from '../lib/colors';
 
-const W = 184;
+const W = 180;
 
 /** A color button that opens suggested colors, a color-code box and the browser's full color picker (a bottom sheet on phones). */
 export default function ColorPicker({ value, onChange, existing = [], title = 'Change color', className, children }: {
@@ -19,7 +19,7 @@ export default function ColorPicker({ value, onChange, existing = [], title = 'C
     if (!r) return;
     const h = pop.current?.offsetHeight ?? 260;
     const below = r.bottom + 4 + h <= window.innerHeight;
-    setPos({ left: Math.min(Math.max(8, r.left), window.innerWidth - W - 8), top: below ? r.bottom + 4 : Math.max(8, r.top - h - 4) });
+    setPos({ left: Math.min(Math.max(8, r.left), window.innerWidth - (pop.current?.offsetWidth ?? W) - 8), top: below ? r.bottom + 4 : Math.max(8, r.top - h - 4) });
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -49,9 +49,10 @@ export default function ColorPicker({ value, onChange, existing = [], title = 'C
       <div ref={pop} className="color-pop" style={pos} role="dialog" aria-label={title}>
         <div className="color-pop-head">
           <span className="color-cur" style={{ background: value }} />
-          <input value={text} placeholder="#4a7fc1" aria-label="Color code" spellCheck={false} autoCapitalize="off" autoComplete="off"
+          <input className="color-code" size={7} value={text} placeholder="#4a7fc1" aria-label="Color code" spellCheck={false} autoCapitalize="off" autoComplete="off"
             onChange={(e) => { setText(e.target.value); const c = normalizeColor(e.target.value); if (c) onChange(c); }} />
-          <input type="color" className="color-more" title="More colors" aria-label="More colors" value={normalizeColor(value) ?? '#000000'} onChange={(e) => pick(e.target.value)} />
+          <label className="color-more" title="Full color picker">More
+            <input type="color" aria-label="More colors" value={normalizeColor(value) ?? '#000000'} onChange={(e) => pick(e.target.value)} /></label>
         </div>
         <div className="color-sugg-label">Suggested
           <span><button type="button" className="color-shuffle" title="Show other suggestions" aria-label="Show other suggestions" onClick={() => setSugg(suggestColors(existing, 9))}>↻</button>
