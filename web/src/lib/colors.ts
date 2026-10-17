@@ -80,14 +80,14 @@ const blackReadable = (hex: string) => luminance(hexRgb(hex)!) >= 0.3;
 
 const STYLE_POOL = [...new Set([
   ...PRETTY,
-  ...Array.from({ length: 60 }, (_, k) => k * 6).flatMap((h) => [0.3, 0.42, 0.55].flatMap((s) => [0.74, 0.8, 0.86].map((l) => fromHsl(h, s, l)))),
+  ...Array.from({ length: 60 }, (_, k) => k * 6).flatMap((h) => [0.35, 0.55, 0.75, 0.95].flatMap((s) => [0.76, 0.82, 0.88].map((l) => fromHsl(h, s, l)))),
 ])].filter((c) => blackReadable(c) && luminance(hexRgb(c)!) <= 0.82).map((hex) => ({ hex, lab: labOf(hex) }));
 
 /**
  * `n` light, black-text-readable colors in the style of PRETTY, each at least `minEach` (CIEDE2000) from every other
  * suggestion and as far as possible (target `minExisting`) from `existing`. Random among near-best choices so shuffling varies.
  */
-export function suggestColors(existing: string[], n = 4, minExisting = 8, minEach = 18): string[] {
+export function suggestColors(existing: string[], n = 4, minExisting = 10, minEach = 18): string[] {
   const ref = existing.map(hexRgb).filter((x): x is RGB => !!x).map(lab);
   const pool = STYLE_POOL.map((c) => ({ ...c, gap: Math.min(Infinity, ...ref.map((r) => dist(r, c.lab))) }));
   for (let tEx = minExisting; tEx >= 0; tEx -= 2)
