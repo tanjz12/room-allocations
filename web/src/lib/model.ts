@@ -92,8 +92,10 @@ export function normalize(s: Partial<State>): State {
   const out: State = { ...d, ...s, config: { ...emptyConfig(), ...(s.config ?? {}) }, mapColors: { ...DEFAULT_MAP_COLORS, ...(s.mapColors ?? {}) } } as State;
   for (const k of ['rooms', 'events', 'categories', 'blocks', 'capTypes', 'phases', 'summaryTotals'] as const) if (!Array.isArray(out[k])) (out as Record<string, unknown>)[k] = [];
   out.typeTags ??= {};
-  const oldGc = (out.config as { mapGroupColor?: { group: string; color: string } }).mapGroupColor;
-  if (oldGc) { if (!out.config.mapGroupColors?.length && oldGc.group) out.config.mapGroupColors = [oldGc]; delete (out.config as { mapGroupColor?: unknown }).mapGroupColor; }
+  const cfg = out.config as Config & { mapGroupColor?: { group: string; color: string }; mapGroupColors?: { group: string; color: string }[] };
+  const oldGc = [...(cfg.mapGroupColor ? [cfg.mapGroupColor] : []), ...(cfg.mapGroupColors ?? [])].filter((g) => g.group);
+  if (oldGc.length && !cfg.sameColors?.length) cfg.sameColors = oldGc.map((g, i) => ({ id: `sc${i + 1}`, name: '', color: g.color, groups: [g.group], eventIds: [] }));
+  delete cfg.mapGroupColor; delete cfg.mapGroupColors;
   for (const c of out.categories) delete (c as Category & { hideOn?: unknown }).hideOn;
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
   if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));
@@ -259,6 +261,7 @@ export function forgetEvent(d: State, id: string) {
   for (const t of d.summaryTotals) if (t.eventIds?.includes(id)) delete t.eventIds;
   const P = d.config.proctors;
   P?.pills.forEach((p) => { p.excludeIds = drop(p.excludeIds)!; p.lines.forEach((l) => { l.eventIds = drop(l.eventIds)!; }); });
+  for (const c of [...(d.config.sameColors ?? []), ...(d.config.colorOptions ?? []).flatMap((o) => o.colors)]) c.eventIds = drop(c.eventIds)!;
 }
 export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
   !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId

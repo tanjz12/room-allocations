@@ -1,6 +1,6 @@
 import type { Font } from 'opentype.js';
 import { roomActive, roomEventsAt, roomTags, textColor, type EventT, type State } from './model';
-import type { MapDef } from './config';
+import type { MapDef, SameColor } from './config';
 import { textPath } from './text';
 
 export type ColorBy = 'event' | 'category';
@@ -25,6 +25,14 @@ export const allMapRoomIds = (s: State) => new Set(s.config.maps.flatMap(mapRoom
 const roomLabel = (m: MapDef, id: string) => m.labels?.[id] ?? id.replace(/^[A-Z]+/, '');
 
 /** What a room should show at time t (null = nothing scheduled / hidden in this variant). */
+export const sameColorOf = (s: State, e: EventT) => {
+  const cs = s.config.sameColors ?? [];
+  return cs.find((c) => c.eventIds.includes(e.id)) ?? cs.find((c) => !!e.group && c.groups.includes(e.group));
+};
+/** Name shown in the legend: the typed name, else the only group/event in it, else "Group N". */
+export const sameColorName = (s: State, c: SameColor, i: number) => c.name.trim()
+  || (c.groups.length + c.eventIds.length === 1 ? c.groups[0] ?? s.events.find((e) => e.id === c.eventIds[0])?.name ?? '' : `Group ${i + 1}`);
+
 export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy, variant: Variant, only?: (e: EventT) => boolean): Entry | null {
   const room = s.rooms.find((r) => r.id === roomId);
   const e = roomEventsAt(s, roomId, t).filter((x) => !only || only(x))[0];
@@ -33,8 +41,8 @@ export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy,
   if (variant === 'external' && !tags.some((c) => c.external)) return null;
   if (variant === 'internal' && tags.length && !tags.some((c) => c.internal)) return null;
   const tag = tags[0];
-  const gc = colorBy === 'event' && !only ? s.config.mapGroupColors?.find((g) => g.group && g.group === e.group) : undefined;
-  if (gc) return { key: GROUP_KEY + gc.group, label: gc.group, color: gc.color };
+  const sc = colorBy === 'event' && !only ? sameColorOf(s, e) : undefined;
+  if (sc) return { key: GROUP_KEY + sc.id, label: sameColorName(s, sc, s.config.sameColors!.indexOf(sc)), color: sc.color };
   const entry = colorBy === 'category'
     ? (tag ? { key: tag.id, label: tag.name, color: tag.color } : { key: 'none', label: 'Untagged', color: '#999999' })
     : { key: e.id, label: e.name, color: e.color };

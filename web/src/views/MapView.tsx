@@ -3,10 +3,13 @@ import type { Font } from 'opentype.js';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import { eventGroups, highlightTotals, roomActive, clashMessage, clashWith, eventAt, fmtTime, uid, roomCapacity, roomEventsAt, textColor, type EventT } from '../lib/model';
-import { allMapRoomIds, renderMap, roomEntry, GROUP_KEY, type ColorBy, type Entry, type Variant } from '../lib/maps';
+import { allMapRoomIds, renderMap, roomEntry, sameColorName, GROUP_KEY, type ColorBy, type Entry, type Variant } from '../lib/maps';
 import { loadFont } from '../lib/text';
 import { ConfirmButton, Swatch, TimePicker, type ViewProps } from './common';
 import MapUpload from './MapUpload';
+import type { SameColor } from '../lib/config';
+
+const PALETTE = ['#4a7fc1', '#e07b39', '#5aa469', '#c0504d', '#8064a2', '#f2c14e', '#4bacc6', '#9c6b4e'];
 
 export function useFont() {
   const [font, setFont] = useState<Font | null>(null);
@@ -19,18 +22,35 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
   const hl = state.config.highlight;
   const [uploading, setUploading] = useState(false);
   const [colorBy, setColorBy] = useState<ColorBy>('event');
-  const [showSel, setShow] = useState<'app' | 'focus'>('focus');
-  const show = !hl ? 'app' : showSel;
+  const [showSel, setShow] = useState('focus');
+  const options = state.config.colorOptions ?? [];
+  const opt = options.find((o) => `opt:${o.id}` === showSel);
+  const show = showSel === 'focus' && hl ? 'focus' : opt ? showSel : 'app';
   const variant: Variant = 'app';
-  const gcs = state.config.mapGroupColors ?? [];
+  const colors = opt ? opt.colors : state.config.sameColors ?? [];
+  const view = show === 'focus' ? state : { ...state, config: { ...state.config, sameColors: colors } };
+  const editColors = (fn: (list: SameColor[]) => void) => update((d) => {
+    const o = opt && d.config.colorOptions?.find((x) => x.id === opt.id);
+    if (o) fn(o.colors); else fn(d.config.sameColors ??= []);
+  });
+  const addColor = () => editColors((l) => { l.push({ id: uid('sc'), name: '', color: PALETTE[l.length % PALETTE.length], groups: [], eventIds: [] }); });
+  const saveOption = () => {
+    const id = uid('opt');
+    update((d) => {
+      const os = (d.config.colorOptions ??= []);
+      let n = os.length + 1;
+      while (os.some((o) => o.name === `Option ${n}`)) n++;
+      os.push({ id, name: `Option ${n}`, colors: structuredClone(colors) });
+    });
+    setShow(`opt:${id}`);
+  };
+  const deleteOption = () => {
+    if (!opt) return;
+    update((d) => { d.config.colorOptions = d.config.colorOptions?.filter((o) => o.id !== opt.id); if (!d.config.colorOptions?.length) delete d.config.colorOptions; });
+    setShow('app');
+  };
   const groups = [...new Set([...eventGroups(state), ...state.events.map((e) => e.group)])].filter((g) => g && state.events.some((e) => e.group === g));
-  const addGroup = (g: string) => update((d) => {
-    d.config.mapGroupColors = [...(d.config.mapGroupColors ?? []), { group: g, color: d.events.find((e) => e.group === g)?.color ?? '#4a7fc1' }];
-  });
-  const removeGroup = (g: string) => update((d) => {
-    d.config.mapGroupColors = (d.config.mapGroupColors ?? []).filter((x) => x.group !== g);
-    if (!d.config.mapGroupColors.length) delete d.config.mapGroupColors;
-  });
+  const evName = (id: string) => state.events.find((e) => e.id === id)?.name ?? id;
   const only = show === 'focus' && hl ? (e: EventT) => hl.eventIds.includes(e.id) : undefined;
   const [hover, setHover] = useState<{ x: number; y: number; id: string } | null>(null);
   const onMap = allMapRoomIds(state);
@@ -38,7 +58,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
 
   const legend = new Map<string, Entry>();
   for (const r of state.rooms) {
-    const e = roomEntry(state, r.id, time, colorBy, variant, only);
+    const e = roomEntry(view, r.id, time, colorBy, variant, only);
     if (e) legend.set(e.key, e);
   }
   const indivLegend = only && colorBy === 'event' ? highlightTotals(state) : null;
@@ -47,10 +67,11 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
   const pct = (n: number) => (projected ? Math.round((n / projected) * 100) : 0);
   const indivRows = indivLegend?.items ?? [];
   const indivPct = indivRows.reduce((a, x) => a + pct(x.total), 0);
-  const rendered = state.config.maps.map((m) => ({ b: m.name, svg: renderMap(m, state, time, colorBy, variant, font, only, state.mapColors.unknown, state.mapColors.other, only ? state.mapColors.focusUnused : undefined).svg }));
-  const sEntries = standalone.map((r) => ({ r, e: roomEntry(state, r.id, time, colorBy, variant, only) }));
-  const setColor = (key: string, color: string) => update((d) => {
-    if (key.startsWith(GROUP_KEY)) { const g = d.config.mapGroupColors?.find((x) => GROUP_KEY + x.group === key); if (g) g.color = color; return; }
+  const rendered = state.config.maps.map((m) => ({ b: m.name, svg: renderMap(m, view, time, colorBy, variant, font, only, state.mapColors.unknown, state.mapColors.other, only ? state.mapColors.focusUnused : undefined).svg }));
+  const sEntries = standalone.map((r) => ({ r, e: roomEntry(view, r.id, time, colorBy, variant, only) }));
+  const setColor = (key: string, color: string) => key.startsWith(GROUP_KEY)
+    ? editColors((l) => { const c = l.find((x) => GROUP_KEY + x.id === key); if (c) c.color = color; })
+    : update((d) => {
     const x = colorBy === 'category' ? d.categories.find((c) => c.id === key) : d.events.find((e) => e.id === key);
     if (x) x.color = color;
   });
@@ -114,7 +135,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
       if (!d.blocks.some((b) => b.roomId === roomId && b.eventId === eventId)) d.blocks.push({ id: uid('b'), roomId, eventId });
     });
   };
-  const showLabel = show === 'focus' ? hl?.label ?? '' : 'all events';
+  const showLabel = show === 'focus' ? hl?.label ?? '' : opt ? opt.name : 'All Events';
   const [busy, setBusy] = useState(false);
   const makePdf = async () => {
       let doc: jsPDF | null = null;
@@ -147,20 +168,46 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
         <button onClick={() => setUploading(true)} disabled={uploading}>Upload floor plan</button>
         <b>Time:</b> <TimePicker time={time} setTime={setTime} />
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="event">event</option><option value="category">tag</option></select></label>
-        {colorBy === 'event' && groups.length > 0 && <span className="tags-cell" title="Every room with an event in one of these groups gets that group's color">Same color for{' '}
-          {gcs.map((g) => <span key={g.group} className="chip tag-chip">{g.group}
-            <button className="chip-x" title={`Remove ${g.group}`} onClick={() => removeGroup(g.group)}>×</button></span>)}
-          {groups.some((g) => !gcs.some((x) => x.group === g)) && (
-            <select className="tag-add" title="Add event group" value="" onChange={(e) => e.target.value && addGroup(e.target.value)}>
-              <option value="" hidden>+</option>
-              {groups.filter((g) => !gcs.some((x) => x.group === g)).map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-          )}</span>}
-        {hl && <label>Show <select value={show} onChange={(e) => setShow(e.target.value as 'app' | 'focus')}>
-          <option value="app">all events</option><option value="focus">{hl.label}</option></select></label>}
+        <label>Show <select value={show} onChange={(e) => setShow(e.target.value)}>
+          <option value="app">All Events</option>
+          {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}
+          {hl && <option value="focus">{hl.label}</option>}</select></label>
         <button onClick={() => window.print()}>Print</button>
         <button onClick={downloadPdf} disabled={busy}>{busy ? 'Making PDF…' : 'Download PDF'}</button>
       </div>
+      {colorBy === 'event' && show !== 'focus' && (
+        <div className="same-colors no-print">
+          <div><b>Same color</b>{opt && <> · option name <input className="opt-name" value={opt.name} placeholder="Option name" aria-label="Option name"
+            onChange={(e) => { const v = e.target.value; update((d) => { const o = d.config.colorOptions?.find((x) => x.id === opt.id); if (o) o.name = v; }); }} /></>}</div>
+          {colors.map((c, i) => (
+            <div key={c.id} className="same-color-row">
+              <input type="color" value={c.color.toLowerCase()} title="Color" onChange={(e) => { const v = e.target.value; editColors((l) => { l[i].color = v; }); }} />
+              <input value={c.name} placeholder={sameColorName(view, { ...c, name: '' }, i) || 'Name'} aria-label="Color name"
+                onChange={(e) => { const v = e.target.value; editColors((l) => { l[i].name = v; }); }} />
+              <span className="tags-cell">
+                {c.groups.map((g) => <span key={`g${g}`} className="chip tag-chip">{g}<span className="muted small">&nbsp;group</span>
+                  <button className="chip-x" title={`Remove ${g}`} onClick={() => editColors((l) => { l[i].groups = l[i].groups.filter((x) => x !== g); })}>×</button></span>)}
+                {c.eventIds.map((id) => <span key={`e${id}`} className="chip tag-chip">{evName(id)}
+                  <button className="chip-x" title={`Remove ${evName(id)}`} onClick={() => editColors((l) => { l[i].eventIds = l[i].eventIds.filter((x) => x !== id); })}>×</button></span>)}
+                <select className="tag-add" title="Add event group or event" value="" onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) editColors((l) => { if (v.startsWith('g:')) l[i].groups.push(v.slice(2)); else l[i].eventIds.push(v.slice(2)); });
+                }}>
+                  <option value="" hidden>+</option>
+                  <optgroup label="Event groups">{groups.filter((g) => !c.groups.includes(g)).map((g) => <option key={g} value={`g:${g}`}>{g}</option>)}</optgroup>
+                  <optgroup label="Events">{state.events.filter((e) => !c.eventIds.includes(e.id)).map((e) => <option key={e.id} value={`e:${e.id}`}>{e.name}</option>)}</optgroup>
+                </select>
+              </span>
+              <button onClick={() => editColors((l) => { l.splice(i, 1); })}>Delete</button>
+            </div>
+          ))}
+          <div>
+            <button onClick={addColor}>+ Add color</button>{' '}
+            {colors.length > 0 && <button onClick={saveOption}>Save as option</button>}{' '}
+            {opt && <button className="danger" onClick={deleteOption}>Delete option</button>}
+          </div>
+        </div>
+      )}
       <div className={indivLegend ? 'legend legend-rows' : 'legend'}>
         {indivLegend && <>
           <div className="legend-row">
@@ -209,7 +256,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
         <figure className="map"><figcaption>Not on the floor plans (standalone)</figcaption>
           <svg viewBox={`0 0 ${standalone.length * 220 + 20} 180`} className="standalone">
             {sEntries.map(({ r, e }, i) => {
-              const fill = e?.color ?? (only && roomEntry(state, r.id, time, colorBy, variant) ? state.mapColors.other : only ? state.mapColors.focusUnused : state.mapColors.unused);
+              const fill = e?.color ?? (only && roomEntry(view, r.id, time, colorBy, variant) ? state.mapColors.other : only ? state.mapColors.focusUnused : state.mapColors.unused);
               return (
                 <g key={r.id} data-room={r.id}>
                   <rect x={20 + i * 220} y={20} width={200} height={140} fill={fill} stroke="#333" strokeWidth={2} />

@@ -21,9 +21,13 @@ export type Proctors = {
 };
 /** Events in `eventIds` need `minutes` free before and after them in the same room. */
 export type Spacing = { eventIds: string[]; minutes: number; label: string };
+/** Floor plans (color by event): rooms with any of these event groups or events share one color. */
+export type SameColor = { id: string; name: string; color: string; groups: string[]; eventIds: string[] };
+/** A saved set of same-color groupings, offered in the floor plans' Show menu. */
+export type ColorOption = { id: string; name: string; colors: SameColor[] };
 export type Config = {
   title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
-  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing; mapGroupColors?: { group: string; color: string }[];
+  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing; sameColors?: SameColor[]; colorOptions?: ColorOption[];
   maps: MapDef[]; notes?: Record<string, string>;
   drive?: DriveConfig; sheetTypeFill?: Record<string, string>;
   /** Phase timelines this data uses (none on a blank site), e.g. BMT's External and Internal schedules. */
