@@ -1,6 +1,6 @@
-import { roomTypes, uid, type State } from '../lib/model';
-import { Fragment } from 'react';
-import type { PillBound, ProctorPill, Proctors } from '../lib/config';
+import { baseType, uid, type State } from '../lib/model';
+import { Fragment, useState } from 'react';
+import type { PillBound, ProctorPill, Proctors, RoomMatch } from '../lib/config';
 import { ConfirmButton, type ViewProps } from './common';
 
 const newPill = (name: string, group: string): ProctorPill => ({ id: uid('pill'), name, group, excludeIds: [], lines: [{ label: '', eventIds: [] }] });
@@ -23,11 +23,56 @@ function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[
   );
 }
 
+const FIELD_NAMES: Record<RoomMatch['field'], string> = { type: 'room type', building: 'building', status: 'status', room: 'room' };
+
+/** Chips for room matches; type in the box to see matching room types, buildings, statuses and room names. */
+function RoomChips({ state, value, onChange }: { state: State; value: RoomMatch[]; onChange: (v: RoomMatch[]) => void }) {
+  const [q, setQ] = useState('');
+  const [hi, setHi] = useState(0);
+  const label = (m: RoomMatch) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value;
+  const all: RoomMatch[] = [];
+  const seen = new Set<string>();
+  const add = (m: RoomMatch) => { const k = m.field + '\0' + m.value; if (m.value && !seen.has(k)) { seen.add(k); all.push(m); } };
+  for (const r of state.rooms) { add({ field: 'type', value: baseType(r.type) }); add({ field: 'type', value: r.type }); }
+  for (const r of state.rooms) add({ field: 'building', value: r.building });
+  for (const r of state.rooms) add({ field: 'status', value: r.status ?? '' });
+  for (const r of state.rooms) add({ field: 'room', value: r.id });
+  const needle = q.trim().toLowerCase();
+  const matches = needle ? all.filter((m) => !value.some((v) => v.field === m.field && v.value === m.value) && label(m).toLowerCase().includes(needle))
+    .sort((a, b) => +!label(a).toLowerCase().startsWith(needle) - +!label(b).toLowerCase().startsWith(needle)).slice(0, 8) : [];
+  const pick = (m: RoomMatch) => { onChange([...value, m]); setQ(''); setHi(0); };
+  return (
+    <span className="tags-cell room-chips">
+      {value.map((m, i) => (
+        <span key={i} className="chip tag-chip" title={FIELD_NAMES[m.field]}>{label(m)}<span className="muted small">&nbsp;{FIELD_NAMES[m.field]}</span>
+          <button className="chip-x" title={`Remove ${label(m)}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button></span>
+      ))}
+      <span className="suggest">
+        <input value={q} placeholder="+ type to add" aria-label="Add room type, building, status or room" onChange={(e) => { setQ(e.target.value); setHi(0); }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+            else if (e.key === 'Enter' && matches[hi]) { e.preventDefault(); pick(matches[hi]); }
+            else if (e.key === 'Escape') setQ('');
+          }} />
+        {needle && <span className="suggest-list" role="listbox">
+          {matches.length ? matches.map((m, i) => (
+            <button key={m.field + m.value} role="option" aria-selected={i === hi} className={i === hi ? 'on' : ''}
+              onMouseDown={(e) => { e.preventDefault(); pick(m); }}>{label(m)} <span className="muted small">{FIELD_NAMES[m.field]}</span></button>
+          )) : <span className="muted small">No matches</span>}
+        </span>}
+      </span>
+    </span>
+  );
+}
+
 export default function SummarySettings({ state, update }: Pick<ViewProps, 'state' | 'update'>) {
   const groups = [...new Set([...(state.config.eventGroups ?? []), ...state.events.map((e) => e.group).filter(Boolean)])];
   const capTypes = state.capTypes;
-  const types = roomTypes(state);
   const P = state.config.proctors;
+  const [openId, setOpenId] = useState('');
+  const openPill = P?.pills.find((x) => x.id === openId)?.id ?? P?.pills[0]?.id;
+  const listedName = P?.listed.length ? P.listed.map((m) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value).join(', ') : 'listed rooms';
   const setP = (f: (p: Proctors) => void) => update((d) => { if (d.config.proctors) f(d.config.proctors); });
   const boundSelect = (b: PillBound | undefined, side: 'from' | 'to', set: (b?: PillBound) => void) => {
     const v = !b ? '' : 'time' in b ? 't' : `${b.edge}:${b.phaseId}`;
@@ -99,16 +144,22 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
       <p className="muted">Proctors needed at the busiest 15-minute slot: rooms in use for the chosen group's events, each counted once, with the min and ideal capacity types as the number of proctors per room.</p>
       <p><label><input type="checkbox" checked={!!P} onChange={(e) => update((d) => {
         if (!e.target.checked) { delete d.config.proctors; return; }
-        d.config.proctors = { minCap: '', idealCap: '', bigType: '', pills: [newPill('Proctors', groups[0] ?? '')] };
+        d.config.proctors = { minCap: '', idealCap: '', listed: [], pills: [newPill('Proctors', groups[0] ?? '')] };
       })} /> Show proctors in the summary</label></p>
       {P && <table className="table proctor-settings"><tbody>
         <tr><th>Proctors per room</th><td>min {capSelect(P.minCap, (v) => setP((p) => { p.minCap = v; }))}
           {' '}ideal {capSelect(P.idealCap, (v) => setP((p) => { p.idealCap = v; }))}</td></tr>
-        <tr><th>Rooms listed one by one</th><td><select value={P.bigType} onChange={(e) => setP((p) => { p.bigType = e.target.value; })}>
-          <option value="">none</option>{types.map((t) => <option key={t}>{t}</option>)}</select>
-          <span className="muted small"> each gets its own editable proctor count</span></td></tr>
+        <tr><th>Rooms listed one by one</th><td><RoomChips state={state} value={P.listed} onChange={(v) => setP((p) => { p.listed = v; })} />
+          <div className="muted small">Rooms matching any of these each get their own editable proctor count.</div></td></tr>
         <tr><th>Pills</th><td>
           {P.pills.map((pill, pi) => (
+            pill.id !== openPill ? (
+            <div key={pill.id} className="pill-edit collapsed">
+              <div><b>{pill.name || 'Untitled pill'}</b>{' '}
+                <span className="muted small">{pill.group || '—'} events{pill.from || pill.to ? ', part of the day' : ', whole day'}{pill.lines.some((l) => l.label) ? ` · ${pill.lines.map((l) => l.label).filter(Boolean).join(', ')}` : ''}</span>
+                {' '}<button onClick={() => setOpenId(pill.id)}>Edit</button></div>
+            </div>
+            ) : (
             <div key={pill.id} className="pill-edit">
               <div><input value={pill.name} title="Pill name" onChange={(e) => setP((p) => { p.pills[pi].name = e.target.value; })} />
                 {' '}from {boundSelect(pill.from, 'from', (b) => setP((p) => { if (b) p.pills[pi].from = b; else delete p.pills[pi].from; }))}
@@ -126,8 +177,8 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
                     if (v) x.rooms = v; else delete x.rooms;
                   })}>
                     <option value="">all rooms</option>
-                    <option value="others" disabled={!P.bigType}>{P.bigType ? `all but ${P.bigType}` : 'all but listed rooms'}</option>
-                    <option value="listed" disabled={!P.bigType}>only {P.bigType || 'listed rooms'}</option>
+                    <option value="others" disabled={!P.listed.length}>all but {listedName}</option>
+                    <option value="listed" disabled={!P.listed.length}>only {listedName}</option>
                   </select>
                   {' '}with <EventChips state={state} ids={l.eventIds} onChange={(ids) => setP((p) => { p.pills[pi].lines[li].eventIds = ids; })} />
                   {!l.eventIds.length && <span className="muted small"> rooms at the pill's busiest slot</span>}
@@ -136,8 +187,8 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
               ))}
               <button onClick={() => setP((p) => { p.pills[pi].lines.push({ label: '', eventIds: [] }); })}>+ Add line</button>
             </div>
-          ))}
-          <button onClick={() => setP((p) => { p.pills.push(newPill(`Proctors ${p.pills.length + 1}`, p.pills.at(-1)?.group ?? groups[0] ?? '')); })}>+ Add pill</button>
+          )))}
+          <button onClick={() => { const np = newPill(`Proctors ${P.pills.length + 1}`, P.pills.at(-1)?.group ?? groups[0] ?? ''); setP((p) => { p.pills.push(np); }); setOpenId(np.id); }}>+ Add pill</button>
           <p className="muted small">Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</p>
         </td></tr>
         <tr><th>Note</th><td><textarea rows={2} value={P.note ?? ''} onChange={(e) => setP((p) => { if (e.target.value) p.note = e.target.value; else delete p.note; })} /></td></tr>

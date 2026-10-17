@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { emptyConfig, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomSign } from './config';
+import { emptyConfig, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
 
 /** Only rooms with status Yes are scheduled or counted. */
 export type Room = { id: string; name: string; building: string; type: string; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
@@ -225,7 +225,12 @@ export function proctorPills(state: State) {
     return { pill, slots, min: peak(slots, P.minCap), ideal: peak(slots, P.idealCap) };
   });
 }
-type OldProctors = Proctors & { group?: string; excludeIds?: string[]; splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] };
+type OldProctors = Proctors & { bigType?: string; group?: string; excludeIds?: string[]; splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] };
+/** "Large (Ana, Bo)" is room type Large. */
+export const baseType = (t: string) => t.replace(/\s*\(.*$/, '') || t;
+export const roomMatches = (r: Room, m: RoomMatch) =>
+  m.field === 'room' ? r.id === m.value : m.field === 'type' ? r.type === m.value || baseType(r.type) === m.value : (r[m.field] ?? '') === m.value;
+export const roomListed = (P: Proctors | undefined, r: Room) => !!P?.listed.some((m) => roomMatches(r, m));
 /** Turns the old morning/afternoon proctor settings (one event group for all) into pills. */
 export function migrateProctors(P: OldProctors) {
   const group = P.group ?? '', excludeIds = P.excludeIds ?? [];
@@ -241,7 +246,8 @@ export function migrateProctors(P: OldProctors) {
     ])];
   }
   for (const p of P.pills) { p.group ??= group; p.excludeIds ??= [...excludeIds]; }
-  delete P.group; delete P.excludeIds; delete P.splitPhaseId; delete P.halves; delete P.smallLabel; delete P.rows;
+  if (!Array.isArray(P.listed)) P.listed = P.bigType ? [{ field: 'type', value: P.bigType }] : [];
+  delete P.bigType; delete P.group; delete P.excludeIds; delete P.splitPhaseId; delete P.halves; delete P.smallLabel; delete P.rows;
 }
 /** Drops a deleted event from the summary settings. */
 export function forgetEvent(d: State, id: string) {

@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { eventAt, eventTotals, fmtTime, procRooms, proctorPills, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
+import { baseType, eventAt, eventTotals, roomListed, fmtTime, procRooms, proctorPills, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
 import type { ProctorLine } from '../lib/config';
 import { Swatch, type ViewProps } from './common';
 import SummarySettings from './SummarySettings';
@@ -9,7 +9,7 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
   type Row = (typeof rows)[number];
   const P = state.config.proctors;
   const minCap = P?.minCap ?? '';
-  const big = (r: Room) => r.type === P?.bigType;
+  const big = (r: Room) => roomListed(P, r);
   const procInput = (r: Room) => {
     const res = roomCapacity(state, r, minCap);
     const ovr = res.source === 'override';
@@ -25,8 +25,6 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
     );
   };
   type Part = { key: string; node: ReactNode };
-  // "Large (Ana, Bo)" counts as Large.
-  const baseType = (t: string) => t.replace(/\s*\(.*$/, '') || t;
   const breakdownParts = (rooms: ProcRoom[]): Part[] => {
     const byType = new Map<string, number>();
     for (const { r } of rooms) if (!big(r)) { const t = baseType(r.type); byType.set(t, (byType.get(t) ?? 0) + 1); }

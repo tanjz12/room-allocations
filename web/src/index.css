@@ -293,5 +293,13 @@ h1.title { cursor: text; }
 .proctor-settings th { position: static; width: 170px; white-space: nowrap; }
 .proctor-settings textarea { width: 100%; min-width: 320px; font: inherit; }
 .pill-edit { border: 1px solid #d6dde3; border-radius: 6px; padding: 6px 8px; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.pill-edit.collapsed { background: #f6f8fa; }
+.pill-edit.collapsed button { padding: 0 8px; }
 .pill-line { padding-left: 14px; }
 .nowrap { white-space: nowrap; }
+.suggest { position: relative; display: inline-block; }
+.suggest input { width: 130px; padding: 1px 6px; border-radius: 10px; }
+.suggest-list { position: absolute; z-index: 30; left: 0; top: 100%; min-width: 220px; max-width: 320px; background: #fff; border: 1px solid #c8ccd6; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); padding: 3px; display: flex; flex-direction: column; }
+.suggest-list button { text-align: left; border: none; background: transparent; padding: 3px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggest-list button.on, .suggest-list button:hover { background: #e6f2f4; }
+.suggest-list > span { padding: 3px 6px; }
