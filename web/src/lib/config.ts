@@ -52,6 +52,11 @@ export type DriveConfig = { folderId: string; jsonName: string; sheetName: strin
 /** A Drive folder picked for saving outputs; the package remembers it as the default for next time. */
 export type DriveFolder = { id: string; name: string };
 export const DEFAULT_TITLE = 'Room Allocation';
+/** The part of the site title users edit in the header (the text before “Room Allocation”). */
+export const headerPrefix = (title: string) => { const t = title || DEFAULT_TITLE; return t.endsWith(DEFAULT_TITLE) ? t.slice(0, -DEFAULT_TITLE.length).trim() : t; };
+/** Default export file name: the header prefix, then `base`, words joined by dashes. */
+export const exportName = (title: string, base: string) =>
+  [headerPrefix(title), base].join(' ').replace(/[\\/:*?"<>|]+/g, ' ').trim().split(/\s+/).join('-');
 export const emptyConfig = (): Config => ({ title: DEFAULT_TITLE, roomTypes: [], eventGroups: [], eventOrder: [], summaryEventIds: [], maps: [] });
 
 export type PhaseSchedule = { key: string; name: string };

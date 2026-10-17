@@ -141,16 +141,17 @@ export function roomCapacity(s: State, room: Room, capId: string, seen: string[]
 
 export const eventAt = (e: EventT, t: number) => e.start <= t && t < e.end;
 
-export function roomEventsAt(s: State, roomId: string, t: number): EventT[] {
+/** Events in an active room at time `t`; with `t` null, all of its events for the day in time order. */
+export function roomEventsAt(s: State, roomId: string, t: number | null): EventT[] {
   const out: EventT[] = [];
   const room = s.rooms.find((r) => r.id === roomId);
   if (!room || !roomActive(room)) return out;
   for (const b of s.blocks) {
     if (b.roomId !== roomId) continue;
     const e = s.events.find((x) => x.id === b.eventId);
-    if (e && eventAt(e, t)) out.push(e);
+    if (e && (t === null || eventAt(e, t))) out.push(e);
   }
-  return out;
+  return t === null ? out.sort((a, b) => a.start - b.start) : out;
 }
 
 export const overlaps = (a: EventT, b: EventT) => a.start < b.end && b.start < a.end;

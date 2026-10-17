@@ -1,4 +1,5 @@
 import { STATE_VERSION, type State } from './model';
+import { exportName } from './config';
 import { sanitizeSvg } from './maps';
 import { isSvgLogo, svgLogoText, svgLogoUrl, validFont, validLogo } from './signs';
 
@@ -13,8 +14,7 @@ const gzip = (b: Blob) => new Response(b.stream().pipeThrough(new CompressionStr
 /** Exported gzipped (.json.gz): the floor-plan SVGs compress to about a third. */
 export async function packageFile(state: State) {
   const blob = new Blob([await gzip(new Blob([JSON.stringify(makePackage(state))]))], { type: 'application/gzip' });
-  const slug = (state.config.title || 'room-allocation').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return { blob, name: `${slug || 'room-allocation'}-package.json.gz` };
+  return { blob, name: `${exportName(state.config.title, 'room-allocation-package')}.json.gz` };
 }
 
 /** Reads a package file, gzipped or plain JSON. */

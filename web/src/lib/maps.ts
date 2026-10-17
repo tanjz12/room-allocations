@@ -33,7 +33,7 @@ export const sameColorOf = (s: State, e: EventT) => {
 export const sameColorName = (s: State, c: SameColor, i: number) => c.name.trim()
   || (c.groups.length + c.eventIds.length === 1 ? c.groups[0] ?? s.events.find((e) => e.id === c.eventIds[0])?.name ?? '' : `Group ${i + 1}`);
 
-export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy, variant: Variant, only?: (e: EventT) => boolean): Entry | null {
+export function roomEntry(s: State, roomId: string, t: number | null, colorBy: ColorBy, variant: Variant, only?: (e: EventT) => boolean): Entry | null {
   const room = s.rooms.find((r) => r.id === roomId);
   const e = roomEventsAt(s, roomId, t).filter((x) => !only || only(x))[0];
   if (!room || !e) return null;
@@ -49,7 +49,7 @@ export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy,
   return entry;
 }
 
-export function renderMap(map: MapDef, s: State, t: number, colorBy: ColorBy, variant: Variant, font: Font | null, only?: (e: EventT) => boolean, unknownFill?: string, otherFill?: string, unusedFill?: string) {
+export function renderMap(map: MapDef, s: State, t: number | null, colorBy: ColorBy, variant: Variant, font: Font | null, only?: (e: EventT) => boolean, unknownFill?: string, otherFill?: string, unusedFill?: string) {
   const doc = new DOMParser().parseFromString(scopedTemplate(map), 'image/svg+xml');
   const keep = (id: string) => !!map.keepOrig?.includes(id);
   const svg = doc.documentElement;

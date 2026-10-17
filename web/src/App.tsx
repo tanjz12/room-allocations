@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppState, initialState, normalize, type State } from './lib/model';
-import { DEFAULT_TITLE } from './lib/config';
+import { DEFAULT_TITLE, headerPrefix } from './lib/config';
 import Schedule from './views/Schedule';
 import CapacityView from './views/CapacityView';
 import EventsView from './views/EventsView';
@@ -62,7 +62,7 @@ export default function App() {
     finishSignIn()?.then((email) => { setAccount(email); setDrive({}); }, (e) => fail(e));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const title = state.config.title || DEFAULT_TITLE;
-  const titlePrefix = title.endsWith(DEFAULT_TITLE) ? title.slice(0, -DEFAULT_TITLE.length).trim() : title;
+  const titlePrefix = headerPrefix(title);
   const prefixRef = useRef<HTMLSpanElement>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   useEffect(() => { const el = prefixRef.current; if (el && document.activeElement !== el) el.textContent = titlePrefix; }, [titlePrefix]);

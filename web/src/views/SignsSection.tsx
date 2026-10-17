@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { NoteStyle, RoomSign, SignConfig } from '../lib/config';
+import { exportName, type NoteStyle, type RoomSign, type SignConfig } from '../lib/config';
 import { DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, loadSignFont, logoBox, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
 import { pickFolder, saveSigns } from '../lib/drive';
 import type { ViewProps } from './common';
@@ -44,7 +44,8 @@ export default function SignsSection({ state, update }: ViewProps) {
 
   const signs = buildSigns(state);
   const rooms = signRooms(state);
-  const name = cfg.fileName?.trim() || 'Room Signs';
+  const defaultName = exportName(state.config.title, 'Room Signs');
+  const name = cfg.fileName?.trim() || defaultName;
   const setCfg = (p: Partial<SignConfig>) => update((d) => { d.config.signs = { ...(d.config.signs ?? {}), ...p }; });
   const setRoom = (id: string, p: Partial<RoomSign>) => update((d) => { const r = d.rooms.find((x) => x.id === id)!; r.sign = { ...(r.sign ?? {}), ...p }; });
   const logoReady = !cfg.logo || !!logo;
@@ -108,7 +109,7 @@ export default function SignsSection({ state, update }: ViewProps) {
         <div className="sign-fields">
           <label>Heading <input value={cfg.heading ?? DEFAULT_HEADING} onChange={(e) => setCfg({ heading: e.target.value })} /></label>
           <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <ColorPicker value={(cfg.color || DEFAULT_SIGN_COLOR)} existing={usedColors(state)} onChange={(e) => setCfg({ color: e })} /></label>
-          <label>File name <input value={cfg.fileName ?? ''} placeholder="Room Signs" onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
+          <label>File name <input value={cfg.fileName ?? defaultName} placeholder={defaultName} onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
           <div className="wide logo-place">
             <b>Font</b>
             <FontControl value={cfg.font} kind="text" defaultLabel="IBM Plex Sans" onChange={(f) => { setCfg({ font: f }); setMsg({}); }} onError={fontErr} />

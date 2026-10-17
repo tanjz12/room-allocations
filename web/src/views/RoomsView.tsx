@@ -55,7 +55,7 @@ export default function RoomsView({ state, update }: ViewProps) {
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
 
       <h2>Tags</h2>
-      <p className="muted">Each tag applies to the room types listed with it, and, if event groups are picked, only to rooms whose scheduled events are all (or any, if chosen) in those groups (“also when nothing is scheduled” covers empty rooms). Tags also set the room sign box color. Tags color the floor plans and generated maps (when “color by tag” is chosen, using the first tag) and decide which rooms appear on the internal vs external maps (a room shows if any of its tags is marked for that map; untagged rooms show on internal maps only). Only rooms with status Yes are colored.</p>
+      <p className="muted">Tags are for coloring maps. You can choose whether a color shows on the internal map or the external map. The tag of a room is determined by its events. Only rooms with status Yes are colored on the map.</p>
       <table className="table">
         <thead><tr><th>Color</th><th>Name</th><th>Internal map</th><th>External map</th><th>Room types</th><th title="Blank: applies whatever is scheduled">if the room's event contains</th><th></th></tr></thead>
         <tbody>

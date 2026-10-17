@@ -2,9 +2,9 @@ import { useState } from 'react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
-import { fmtTime } from '../lib/model';
-import { renderMap, type ColorBy } from '../lib/maps';
-import { TimePicker, type ViewProps } from './common';
+import { exportName } from '../lib/config';
+import { renderMap } from '../lib/maps';
+import { type ViewProps } from './common';
 import { pickFolder, saveMaps } from '../lib/drive';
 import { useFont } from './MapView';
 import SignsSection from './SignsSection';
@@ -39,11 +39,10 @@ async function toPdf(o: Out): Promise<Blob> {
 }
 
 export default function ExportView(props: ViewProps) {
-  const { state, update, time, setTime } = props;
+  const { state, update } = props;
   const [msg, setMsg] = useState<{ err?: string; link?: string; folder?: string }>({});
   const font = useFont();
   const maps = state.config.maps;
-  const [colorBy, setColorBy] = useState<ColorBy>('category');
   const [kinds, setKinds] = useState({ internal: true, external: true });
   const [fmts, setFmts] = useState({ svg: true, png: true, pdf: true });
   const [busy, setBusy] = useState('');
@@ -51,7 +50,7 @@ export default function ExportView(props: ViewProps) {
 
   const outputs: Out[] = !ready ? [] : (['internal', 'external'] as const).filter((k) => kinds[k]).flatMap((k) =>
     maps.map((m) => {
-      const r = renderMap(m, state, time, colorBy, k, font);
+      const r = renderMap(m, state, null, 'category', k, font);
       return { name: fileBase(m.name, k), svg: r.svg, width: r.width, height: r.height };
     }));
 
@@ -68,12 +67,11 @@ export default function ExportView(props: ViewProps) {
   };
   const download = async () => {
     const zip = new JSZip();
-    const stamp = fmtTime(time).replace(':', '').replace(' ', '');
     for (const f of await mapFiles()) zip.folder(f.dir)!.file(f.name, f.blob);
     setBusy('Zipping…');
     const blob = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = `maps_${stamp}.zip`; a.click();
+    a.href = URL.createObjectURL(blob); a.download = `${exportName(state.config.title, 'maps')}.zip`; a.click();
     setBusy('');
   };
 
@@ -95,8 +93,6 @@ export default function ExportView(props: ViewProps) {
     <div className="page">
       <h2>Maps &amp; Room signs</h2>
       <div className="toolbar">
-        <b>Time:</b> <TimePicker time={time} setTime={setTime} />
-        <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="category">tag</option><option value="event">event</option></select></label>
         <label><input type="checkbox" checked={kinds.internal} onChange={(e) => setKinds({ ...kinds, internal: e.target.checked })} /> Internal</label>
         <label><input type="checkbox" checked={kinds.external} onChange={(e) => setKinds({ ...kinds, external: e.target.checked })} /> External</label>
         {(['svg', 'png', 'pdf'] as const).map((f) => (
@@ -108,7 +104,7 @@ export default function ExportView(props: ViewProps) {
         {msg.link && <span>Saved to <a href={msg.link} target="_blank" rel="noreferrer">{msg.folder}</a></span>}
         {msg.err && <span className="warn">{msg.err}</span>}
       </div>
-      <p className="muted">Internal maps show rooms whose event is untagged or has a tag marked “Internal map”; external maps only show events with an “External map” tag (other rooms blend into the floor, labels hidden). The legend is rebuilt from what's shown.</p>
+      <p className="muted">Maps cover the whole day: every room used at any time is colored by its tag. Internal maps show untagged rooms and rooms with an “Internal map” tag; external maps show only rooms with an “External map” tag (others blend into the floor, unlabeled). The legend is rebuilt from what's shown.</p>
       <div className="maps">
         {outputs.map((o) => (
           <figure key={o.name} className="map"><figcaption>{o.name}</figcaption><div dangerouslySetInnerHTML={{ __html: o.svg }} /></figure>

@@ -7,7 +7,7 @@ import { allMapRoomIds, renderMap, roomEntry, sameColorName, GROUP_KEY, type Col
 import { loadFont } from '../lib/text';
 import { ConfirmButton, Swatch, TimePicker, type ViewProps } from './common';
 import MapUpload from './MapUpload';
-import type { SameColor } from '../lib/config';
+import { exportName, type SameColor } from '../lib/config';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
 
@@ -153,7 +153,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
         doc.text(`${svg.closest('figure')?.querySelector('figcaption')?.textContent ?? ''} · ${fmtTime(time)} · ${showLabel}`, 8, 16);
         await doc.svg(svg, { x: 0, y: top, width: w, height: h });
       }
-      return { doc, name: `floor-plans-${fmtTime(time).replace(/[^0-9APM]/g, '')}.pdf` };
+      return { doc, name: `${exportName(state.config.title, `floor-plans-${fmtTime(time).replace(/[^0-9APM]/g, '')}`)}.pdf` };
   };
   const downloadPdf = async () => {
     setBusy(true);
