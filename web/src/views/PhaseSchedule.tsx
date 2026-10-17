@@ -2,6 +2,8 @@ import { useState, type CSSProperties, type PointerEvent as RPointerEvent } from
 import type { PhaseSchedule as Sched } from '../lib/config';
 import { DAY_END, DAY_START, applyPhaseRefs, fmtTime, phaseTimes, textColor, uid, type Phase } from '../lib/model';
 import { TimeSelect, type ViewProps } from './common';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 const HOURS: number[] = [];
 for (let t = DAY_START; t <= DAY_END; t += 60) HOURS.push(t);
@@ -151,7 +153,7 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
             <tbody>
               {draft.phases.map((p) => (
                 <tr key={p.id}>
-                  <td><input type="color" value={p.color} onChange={(x) => setPhase(p.id, { color: x.target.value })} /></td>
+                  <td><ColorPicker value={p.color} existing={usedColors(state)} onChange={(x) => setPhase(p.id, { color: x })} /></td>
                   <td><input value={p.name} onChange={(x) => setPhase(p.id, { name: x.target.value })} /></td>
                   <td className="muted">{state.events.filter((e) => e.startRef?.phaseId === p.id || e.endRef?.phaseId === p.id).map((e) => e.name).join(', ')}</td>
                   <td><button className="danger" onClick={() => setDraft({ ...draft, phases: draft.phases.filter((x) => x.id !== p.id) })}>Delete</button></td>

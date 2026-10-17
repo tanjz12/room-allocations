@@ -8,6 +8,8 @@ import { loadFont } from '../lib/text';
 import { ConfirmButton, Swatch, TimePicker, type ViewProps } from './common';
 import MapUpload from './MapUpload';
 import type { SameColor } from '../lib/config';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 const PALETTE = ['#4a7fc1', '#e07b39', '#5aa469', '#c0504d', '#8064a2', '#f2c14e', '#4bacc6', '#9c6b4e'];
 
@@ -50,6 +52,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     setShow('app');
   };
   const groups = [...new Set([...eventGroups(state), ...state.events.map((e) => e.group)])].filter((g) => g && state.events.some((e) => e.group === g));
+  const used = usedColors(view);
   const evName = (id: string) => state.events.find((e) => e.id === id)?.name ?? id;
   const only = show === 'focus' && hl ? (e: EventT) => hl.eventIds.includes(e.id) : undefined;
   const [hover, setHover] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -181,7 +184,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
             onChange={(e) => { const v = e.target.value; update((d) => { const o = d.config.colorOptions?.find((x) => x.id === opt.id); if (o) o.name = v; }); }} /></>}</div>
           {colors.map((c, i) => (
             <div key={c.id} className="same-color-row">
-              <input type="color" value={c.color.toLowerCase()} title="Color" onChange={(e) => { const v = e.target.value; editColors((l) => { l[i].color = v; }); }} />
+              <ColorPicker value={c.color} title="Color" existing={used} onChange={(e) => { const v = e; editColors((l) => { l[i].color = v; }); }} />
               <input value={c.name} placeholder={sameColorName(view, { ...c, name: '' }, i) || 'Name'} aria-label="Color name"
                 onChange={(e) => { const v = e.target.value; editColors((l) => { l[i].name = v; }); }} />
               <span className="tags-cell">
@@ -221,8 +224,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
           <div className="legend-row">
             {indivRows.map(({ e, total }) => (
               <span key={e.id} className="legend-item">
-                <label className="legend-color" title="Click to change color"><Swatch color={e.color} /><span>{e.name} <b>{total}</b> · {pct(total)}%</span>
-                  <input type="color" value={e.color.toLowerCase()} onChange={(x) => setColor(e.id, x.target.value)} /></label>
+                <ColorPicker className="legend-color" title="Click to change color" value={e.color} existing={used} onChange={(x) => setColor(e.id, x)}><Swatch color={e.color} /><span>{e.name} <b>{total}</b> · {pct(total)}%</span></ColorPicker>
               </span>
             ))}
           </div>
@@ -231,15 +233,13 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
           {[...legend.values()].filter((e) => !indivIds.has(e.key)).sort((a, b) => a.label.localeCompare(b.label)).map((e) => (
             <span key={e.key} className="legend-item">
               {e.key === 'none' ? <><Swatch color={e.color} />{e.label}</> : (
-                <label className="legend-color" title="Click to change color"><Swatch color={e.color} />{e.label}
-                  <input type="color" value={e.color.toLowerCase()} onChange={(x) => setColor(e.key, x.target.value)} /></label>
+                <ColorPicker className="legend-color" title="Click to change color" value={e.color} existing={used} onChange={(x) => setColor(e.key, x)}><Swatch color={e.color} />{e.label}</ColorPicker>
               )}
             </span>
           ))}
           {([...(only ? [['other', 'In use']] as const : []), [only ? 'focusUnused' : 'unused', 'Nothing scheduled'], ['unknown', 'Not in rooms list']] as const).map(([k, label]) => (
             <span key={k} className="legend-item">
-              <label className="legend-color" title="Click to change color"><Swatch color={state.mapColors[k]} />{label}
-                <input type="color" value={state.mapColors[k]} onChange={(x) => update((d) => { d.mapColors[k] = x.target.value; })} /></label>
+              <ColorPicker className="legend-color" title="Click to change color" value={state.mapColors[k]} existing={used} onChange={(x) => update((d) => { d.mapColors[k] = x; })}><Swatch color={state.mapColors[k]} />{label}</ColorPicker>
             </span>
           ))}
         </div>

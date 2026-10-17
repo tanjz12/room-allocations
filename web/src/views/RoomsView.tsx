@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, uid, type Category } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 export default function RoomsView({ state, update }: ViewProps) {
   const [newCap, setNewCap] = useState('');
@@ -59,7 +61,7 @@ export default function RoomsView({ state, update }: ViewProps) {
         <tbody>
           {state.categories.map((c) => (
             <tr key={c.id}>
-              <td><input type="color" value={c.color.toLowerCase()} onChange={(x) => setCat(c.id, { color: x.target.value })} /></td>
+              <td><ColorPicker value={c.color} existing={usedColors(state)} onChange={(x) => setCat(c.id, { color: x })} /></td>
               <td><input value={c.name} onChange={(x) => setCat(c.id, { name: x.target.value })} /></td>
               <td><input type="checkbox" checked={c.internal} onChange={(x) => setCat(c.id, { internal: x.target.checked })} /></td>
               <td><input type="checkbox" checked={c.external} onChange={(x) => setCat(c.id, { external: x.target.checked })} /></td>

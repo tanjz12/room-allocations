@@ -1,6 +1,8 @@
 import { DAY_START, OTHER_GROUP, isSub, fmtTime, groupedEvents, forgetEvent, uid, type EventT } from '../lib/model';
 import { ConfirmButton, EventTimeSelect, type ViewProps } from './common';
 import PhaseSchedule from './PhaseSchedule';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 export default function EventsView({ state, update }: ViewProps) {
   const sub = state.config.subgroup;
@@ -20,7 +22,7 @@ export default function EventsView({ state, update }: ViewProps) {
     <td><EventTimeSelect state={state} includeEnd value={e.end} timeRef={e.endRef}
       onChange={(t, r) => setTimes(ids, (x) => t > x.start ? { end: t, endRef: r, start: x.start, startRef: x.startRef } : { end: t, endRef: r, start: t - 15, startRef: null })} /></td>
   </>;
-  const colorIn = (e: EventT) => <input type="color" value={e.color.toLowerCase()} onChange={(x) => setEv(e.id, { color: x.target.value })} />;
+  const colorIn = (e: EventT) => <ColorPicker value={e.color} existing={usedColors(state)} onChange={(x) => setEv(e.id, { color: x })} />;
   const nameIn = (e: EventT) => <input className="name-in" value={e.name} onChange={(x) => setEv(e.id, { name: x.target.value })} />;
   const row = (e: EventT, inSub = false) => (
     <tr key={e.id} className={inSub ? 'sub-row' : undefined}>

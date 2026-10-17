@@ -3,6 +3,8 @@ import type { NoteStyle, RoomSign, SignConfig } from '../lib/config';
 import { DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, fontFromFile, loadSignFont, logoBox, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
 import { pickFolder, saveSigns } from '../lib/drive';
 import type { ViewProps } from './common';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 const download = (blob: Blob, name: string) => {
   const a = document.createElement('a');
@@ -110,7 +112,7 @@ export default function SignsSection({ state, update }: ViewProps) {
         </div>
         <div className="sign-fields">
           <label>Heading <input value={cfg.heading ?? DEFAULT_HEADING} onChange={(e) => setCfg({ heading: e.target.value })} /></label>
-          <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <input type="color" value={(cfg.color || DEFAULT_SIGN_COLOR).toLowerCase()} onChange={(e) => setCfg({ color: e.target.value })} /></label>
+          <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <ColorPicker value={(cfg.color || DEFAULT_SIGN_COLOR)} existing={usedColors(state)} onChange={(e) => setCfg({ color: e })} /></label>
           <label>File name <input value={cfg.fileName ?? ''} placeholder="Room Signs" onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
           <div className="wide logo-place">
             <b>Font</b> <span>{cfg.font ? cfg.font.name : 'IBM Plex Sans (built in)'}</span>

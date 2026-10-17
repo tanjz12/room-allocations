@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MapDef } from '../lib/config';
 import { sanitizeSvg } from '../lib/maps';
 import type { ViewProps } from './common';
+import ColorPicker from './ColorPicker';
+import { usedColors } from '../lib/colors';
 
 type Cand = { i: number; box: [number, number, number, number]; orig: string; room: string };
 type Parsed = { svg: string; w: number; h: number; vb: [number, number, number, number]; cands: Cand[] };
@@ -130,7 +132,7 @@ export default function MapUpload({ state, update, onClose }: Pick<ViewProps, 's
         <h2>Upload floor plan</h2>
         <label>SVG file <input type="file" accept=".svg,image/svg+xml" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} /></label>
         <label>Name <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Main building" /></label>
-        <label title="Fill for rooms with nothing scheduled on external maps">Floor color <input type="color" value={floor} onChange={(e) => setFloor(e.target.value)} /></label>
+        <label title="Fill for rooms with nothing scheduled on external maps">Floor color <ColorPicker value={floor} existing={usedColors(state)} onChange={(e) => setFloor(e)} /></label>
         <label title="Turn off if the SVG already has room names drawn on it"><input type="checkbox" checked={labels} onChange={(e) => setLabels(e.target.checked)} /> Draw room names</label>
         <span className="spacer" />
         <button onClick={onClose}>Cancel</button>
