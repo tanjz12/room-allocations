@@ -1,0 +1,47 @@
+/** Everything specific to one organization lives here and comes from the data package; the defaults are empty. */
+export type MapRoomMeta = { orig: string; box: number[]; added?: boolean; glyphs?: number };
+export type MapMeta = { rooms: Record<string, MapRoomMeta[]>; legend: { x: number; y: number; w: number; h: number; step: number }; width: number; height: number };
+/** `keepOrig`: rooms that keep their template color when unused; `labels`: label text for added room labels (default: id without its leading capitals). */
+export type MapDef = { name: string; svg: string; meta: MapMeta; floor: string; legendSlots: number; keepOrig?: string[]; legendExtra?: { key: string; label: string; color: string }[]; labels?: Record<string, string> };
+/** A set of events shown together on Floor plans with counts and percentages of a projected total. */
+export type Highlight = { label: string; title: string; eventIds: string[]; leadId?: string; projectedDefault: number };
+/** Events listed together under one heading on Events, sharing start/end. */
+export type Subgroup = { name: string; eventIds: string[]; afterId?: string };
+export type ProctorRow = { label: string; eventIds: string[] };
+/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot before/after the split phase. */
+export type Proctors = {
+  group: string; excludeIds: string[]; splitPhaseId?: string; halves: [string, string];
+  minCap: string; idealCap: string; bigType: string; smallLabel: string; rows: ProctorRow[]; note?: string;
+};
+/** Events in `eventIds` need `minutes` free before and after them in the same room. */
+export type Spacing = { eventIds: string[]; minutes: number; label: string };
+export type Config = {
+  title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
+  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing;
+  maps: MapDef[]; notes?: Record<string, string>;
+  drive?: DriveConfig; sheetTypeFill?: Record<string, string>;
+  /** Phase timelines this data uses (none on a blank site), e.g. BMT's External and Internal schedules. */
+  phaseSchedules?: PhaseSchedule[];
+  /** Key of the phase schedule whose times events linked to a phase follow. */
+  alignSchedule?: string;
+  /** Folder generated maps were last saved to on Drive. */
+  mapsFolder?: DriveFolder;
+  signs?: SignConfig;
+};
+/** Room signs: `logo` is a PNG/JPEG data URL; `color` fills the room-number box. */
+/** Logo box in points: `logoSize` square, `logoX` its center from the left, `logoY` its top. */
+export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; font?: SignFontFile; numberFont?: SignFontFile };
+/** Styling for a room's sign note. `font` picks the event font or the room-number font; bold and italic are drawn by the app (no extra font files). */
+export type NoteStyle = { size?: number; font?: 'text' | 'number'; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean };
+/** An uploaded TrueType font: `name` is its family name (also used in Google Slides), `data` the .ttf as base64. */
+export type SignFontFile = { name: string; data: string };
+/** Per-room sign overrides; blank fields fall back to the room's building and name. */
+export type RoomSign = { building?: string; floor?: string; label?: string; copies?: number; note?: string; hide?: boolean; noteStyle?: NoteStyle };
+/** Where Save/Load to Drive reads and writes; access is whatever the signed-in Google account has on these files. */
+export type DriveConfig = { folderId: string; jsonName: string; sheetName: string; fileId?: string; sheetId?: string };
+/** A Drive folder picked for saving outputs; the package remembers it as the default for next time. */
+export type DriveFolder = { id: string; name: string };
+export const DEFAULT_TITLE = 'Room Allocation';
+export const emptyConfig = (): Config => ({ title: DEFAULT_TITLE, roomTypes: [], eventGroups: [], eventOrder: [], summaryEventIds: [], maps: [] });
+
+export type PhaseSchedule = { key: string; name: string };
