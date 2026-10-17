@@ -14,7 +14,23 @@ const lab = ([r, g, b]: RGB) => {
   const x = t((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047), y = t(R * 0.2126 + G * 0.7152 + B * 0.0722), z = t((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 };
-const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+/** CIEDE2000 color difference: about 2 is barely noticeable, 10+ clearly different colors. */
+export const deltaE = (p: number[], q: number[]) => {
+  const [L1, a1, b1] = p, [L2, a2, b2] = q, rad = Math.PI / 180;
+  const C = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2, G = 0.5 * (1 - Math.sqrt(C ** 7 / (C ** 7 + 25 ** 7)));
+  const A1 = a1 * (1 + G), A2 = a2 * (1 + G), C1 = Math.hypot(A1, b1), C2 = Math.hypot(A2, b2);
+  const h = (b: number, a: number) => (Math.atan2(b, a) / rad + 360) % 360, h1 = h(b1, A1), h2 = h(b2, A2);
+  let dh = h2 - h1; if (C1 * C2 === 0) dh = 0; else if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+  const dL = L2 - L1, dC = C2 - C1, dH = 2 * Math.sqrt(C1 * C2) * Math.sin((dh / 2) * rad);
+  const Lm = (L1 + L2) / 2, Cm = (C1 + C2) / 2;
+  let hm = h1 + h2; if (C1 * C2 !== 0) hm = Math.abs(h1 - h2) > 180 ? (hm + (hm < 360 ? 360 : -360)) / 2 : hm / 2;
+  const T = 1 - 0.17 * Math.cos((hm - 30) * rad) + 0.24 * Math.cos(2 * hm * rad) + 0.32 * Math.cos((3 * hm + 6) * rad) - 0.2 * Math.cos((4 * hm - 63) * rad);
+  const SL = 1 + (0.015 * (Lm - 50) ** 2) / Math.sqrt(20 + (Lm - 50) ** 2), SC = 1 + 0.045 * Cm, SH = 1 + 0.015 * Cm * T;
+  const RT = -2 * Math.sqrt(Cm ** 7 / (Cm ** 7 + 25 ** 7)) * Math.sin(60 * Math.exp(-(((hm - 275) / 25) ** 2)) * rad);
+  return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
+};
+const dist = deltaE;
+export const labOf = (hex: string) => lab(hexRgb(hex)!);
 const hsl = ([r, g, b]: RGB) => {
   const [R, G, B] = [r / 255, g / 255, b / 255];
   const mx = Math.max(R, G, B), mn = Math.min(R, G, B), l = (mx + mn) / 2, d = mx - mn;
@@ -48,9 +64,12 @@ export function usedColors(s: State): string[] {
     ...s.events.map((e) => e.color), ...s.categories.map((c) => c.color), ...s.phases.map((p) => p.color),
     ...(s.config.sameColors ?? []).map((c) => c.color), ...(s.config.colorOptions ?? []).flatMap((o) => o.colors.map((c) => c.color)),
     ...Object.values(s.mapColors ?? {}),
+    ...s.config.maps.flatMap((m) => [m.floor, ...(m.legendExtra ?? []).map((x) => x.color), ...svgFills(m.svg)]),
   ];
-  return [...new Set(cs.filter(Boolean).map((c) => c.toLowerCase()))];
+  return [...new Set(cs.filter(Boolean).map((c) => normalizeColor(c) ?? c.toLowerCase()))];
 }
+/** Hex fill colors drawn in a floor plan SVG (stairs, bathrooms, walls…). */
+const svgFills = (svg: string) => [...new Set([...svg.matchAll(/fill(?:="|:\s*)(#[0-9a-f]{3}(?:[0-9a-f]{3})?)\b/gi)].map((m) => m[1]))];
 
 // Light colors from Paper Heart Design's "Peaceful Palettes" (paperheartdesign.com/blog/color-palette-peaceful-palettes).
 const PRETTY = ['#86b9b0', '#8eaebb', '#afb4ad', '#b3cde4', '#bdd9cd', '#bed4e9', '#c4b3a9', '#ccb0be', '#cfcad1', '#d2e1cc', '#d6cfbf', '#d9ae8e',
@@ -59,34 +78,34 @@ const luminance = ([r, g, b]: RGB) => { const f = (c: number) => { c /= 255; ret
 /** Black text on it has at least 7:1 contrast. */
 const blackReadable = (hex: string) => luminance(hexRgb(hex)!) >= 0.3;
 
-/** Light, black-text-readable colors in the style of PRETTY (plus small hue shifts of them), kept away from `existing`, one hue family at a time. */
-export function suggestColors(existing: string[], n = 9): string[] {
+const STYLE_POOL = [...new Set([
+  ...PRETTY,
+  ...Array.from({ length: 60 }, (_, k) => k * 6).flatMap((h) => [0.3, 0.45, 0.6, 0.75].flatMap((s) => [0.62, 0.7, 0.78, 0.86].map((l) => fromHsl(h, s, l)))),
+])].filter((c) => blackReadable(c) && luminance(hexRgb(c)!) <= 0.82).map((hex) => ({ hex, lab: labOf(hex) }));
+
+/**
+ * `n` light, black-text-readable colors in the style of PRETTY, each at least `minEach` (CIEDE2000) from every other
+ * suggestion and as far as possible (target `minExisting`) from `existing`. Random among near-best choices so shuffling varies.
+ */
+export function suggestColors(existing: string[], n = 4, minExisting = 12, minEach = 20): string[] {
   const ref = existing.map(hexRgb).filter((x): x is RGB => !!x).map(lab);
-  const pool = [...new Set(PRETTY.flatMap((c) => {
-    const [h, s, l] = hsl(hexRgb(c)!);
-    return [c, ...[-16, -8, 8, 16].map((d) => {
-      let L = l, out = fromHsl((h + d + 360) % 360, s, L);
-      while (!blackReadable(out) && L < 0.95) out = fromHsl((h + d + 360) % 360, s, (L += 0.02));
-      return out;
-    })];
-  }))].filter(blackReadable).map((hex) => ({ hex, lab: lab(hexRgb(hex)!) }));
-  const gap = (c: (typeof pool)[number]) => Math.min(Infinity, ...ref.map((r) => dist(r, c.lab)));
-  let cands = pool;
-  for (const t of [10, 6, 3, 0]) { cands = pool.filter((c) => gap(c) >= t); if (cands.length >= n * 3) break; }
-  const buckets = new Map<number, typeof pool>();
-  for (const c of cands) {
-    const [h, sat] = hsl(hexRgb(c.hex)!);
-    const k = sat < 0.15 ? -1 : Math.floor(h / 30);
-    buckets.set(k, [...(buckets.get(k) ?? []), c]);
-  }
-  const groups = [...buckets.values()].sort(() => Math.random() - 0.5);
-  const out: typeof pool = [];
-  const far = (c: (typeof pool)[number]) => Math.min(Infinity, ...out.map((x) => dist(x.lab, c.lab)));
-  for (let round = 0; out.length < n && round < 6; round++)
-    for (const g of groups) {
-      if (out.length >= n || !g.length) continue;
-      const i = round ? g.reduce((b, c, k) => (far(c) > far(g[b]) ? k : b), 0) : Math.floor(Math.random() * g.length);
-      if (far(g[i]) >= 10) out.push(...g.splice(i, 1));
+  const pool = STYLE_POOL.map((c) => ({ ...c, gap: Math.min(Infinity, ...ref.map((r) => dist(r, c.lab))) }));
+  for (let tEx = minExisting; tEx >= 0; tEx -= 2)
+    for (const tIn of [minEach, minEach - 4, minEach - 8]) {
+      const cands = pool.filter((c) => c.gap >= tEx);
+      if (cands.length < n) continue;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const out: typeof pool = [];
+        let left = cands;
+        while (out.length < n && left.length) {
+          const score = (c: (typeof pool)[number]) => Math.min(c.gap, 2 * tIn, ...out.map((o) => dist(o.lab, c.lab)));
+          const best = Math.max(...left.map(score)), near = out.length ? left.filter((c) => score(c) >= best * 0.75) : left;
+          const pick = near[Math.floor(Math.random() * near.length)];
+          out.push(pick);
+          left = left.filter((c) => dist(c.lab, pick.lab) >= tIn);
+        }
+        if (out.length === n) return out.map((c) => c.hex).sort((a, b) => hsl(hexRgb(a)!)[0] - hsl(hexRgb(b)!)[0]);
+      }
     }
-  return out.map((c) => c.hex).sort((a, b) => hsl(hexRgb(a)!)[0] - hsl(hexRgb(b)!)[0]);
+  return pool.sort((a, b) => b.gap - a.gap).slice(0, n).map((c) => c.hex);
 }
