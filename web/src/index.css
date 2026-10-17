@@ -404,3 +404,15 @@ button.font-item.on { background: #e3f1ef; }
 .pv-pick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .pv-pick input { width: 130px; }
 .pv-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,.2); }
+.type-in { width: 110px; }
+.room-types td .mono { width: 220px; }
+.nowrap { white-space: nowrap; }
+.map-extras { border: 1px solid #dde1e8; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; font-weight: normal; }
+.map-keep .tags-cell { max-width: none; }
+.room-name-in { width: 140px; font-weight: 600; }
+.hl-settings { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.hl-settings .tags-cell { max-width: none; display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.map.picking svg [data-si]:not([data-room]) { cursor: pointer; }
+.map.picking svg [data-si]:not([data-room]):hover { stroke: #e0007a; stroke-width: 4px; }
+.hl-settings .tag-add { width: auto; min-width: 90px; }
+.upload-section { text-align: left; }

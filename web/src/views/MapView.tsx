@@ -3,10 +3,12 @@ import type { Font } from 'opentype.js';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import { eventGroups, highlightTotals, roomActive, clashMessage, clashWith, eventAt, fmtTime, uid, roomCapacity, roomEventsAt, textColor, type EventT } from '../lib/model';
-import { allMapRoomIds, renderMap, roomEntry, sameColorName, GROUP_KEY, type ColorBy, type Entry, type Variant } from '../lib/maps';
+import { allMapRoomIds, renderMap, toggleExtraShape, roomEntry, sameColorName, GROUP_KEY, type ColorBy, type Entry, type Variant } from '../lib/maps';
 import { loadFont } from '../lib/text';
 import { ConfirmButton, Swatch, TimePicker, type ViewProps } from './common';
-import MapUpload from './MapUpload';
+import MapUpload, { MapExtras } from './MapUpload';
+import { EventChips } from './SummarySettings';
+import type { Highlight } from '../lib/config';
 import { exportName, type SameColor } from '../lib/config';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
@@ -35,6 +37,15 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     if (o) fn(o.colors); else fn(d.config.sameColors ??= []);
   });
   const [groupsOpen, setGroupsOpen] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState<string | null>(null);
+  const [hlOpen, setHlOpen] = useState(false);
+  const [pick, setPick] = useState<{ map: string; key: string } | null>(null);
+  const editHl = (fn: (h: Highlight) => void) => update((d) => { const h = d.config.highlight; if (h) { fn(h); h.leadId = h.eventIds[0]; } });
+  const pickShow = (v: string) => {
+    if (v !== 'new') return setShow(v);
+    update((d) => { d.config.highlight = { label: 'Highlight', title: '', eventIds: [], projectedDefault: 0 }; });
+    setShow('focus'); setHlOpen(true);
+  };
   const addColor = () => editColors((l) => { l.push({ id: uid('sc'), name: '', color: defaultColor(state, l.map((c) => c.color)), groups: [], eventIds: [] }); });
   const saveOption = () => {
     const id = uid('opt');
@@ -97,6 +108,13 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); document.removeEventListener('scroll', scroll, true); };
   }, [edit]);
   const onClick = (ev: React.MouseEvent) => {
+    if (pick) {
+      const sh = (ev.target as Element).closest('[data-si]');
+      if (!sh || sh.hasAttribute('data-room') || (sh.closest('figure') as HTMLElement | null)?.dataset.map !== pick.map) return;
+      const i = +sh.getAttribute('data-si')!;
+      update((d) => { const m = d.config.maps.find((x) => x.name === pick.map); if (m) toggleExtraShape(m, i, pick.key); });
+      return;
+    }
     const el = (ev.target as Element).closest('[data-room]');
     if (!el) return;
     setHover(null);
@@ -170,12 +188,12 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
       <div className="toolbar no-print">
         <b>Time:</b> <TimePicker time={time} setTime={setTime} />
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="event">event</option><option value="category">tag</option></select></label>
-        <label>Show <select value={show} onChange={(e) => setShow(e.target.value)}>
+        <label>Show <select value={show} onChange={(e) => pickShow(e.target.value)}>
           <option value="app">All Events</option>
-          {hl && <option value="focus">{hl.label}</option>}
-          {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}</select></label>
+          {hl && <option value="focus">{hl.label || 'Highlight'}</option>}
+          {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}
+          {!hl && <option value="new">+ New highlight…</option>}</select></label>
         <span className="toolbar-actions">
-          <button onClick={() => setUploading(true)} disabled={uploading}>Upload floor plan</button>
           <button onClick={() => window.print()}>Print</button>
           <button onClick={downloadPdf} disabled={busy}>{busy ? 'Making PDF…' : 'Download PDF'}</button>
         </span>
@@ -216,6 +234,28 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
           </>}
         </div>
       )}
+      {show === 'focus' && hl && (
+        <div className="same-colors no-print">
+          <div><button className="group-toggle" aria-expanded={hlOpen} onClick={() => setHlOpen(!hlOpen)}>{hlOpen ? '▾' : '▸'} <b>Highlight settings</b></button></div>
+          {hlOpen && <div className="hl-settings">
+            <label>Menu name <input value={hl.label} onChange={(e) => { const v = e.target.value; editHl((h) => { h.label = v; }); }} /></label>
+            <label>Title <input value={hl.title} placeholder="e.g. Individual" onChange={(e) => { const v = e.target.value; editHl((h) => { h.title = v; }); }} /></label>
+            <label>Projected total <input className="numin" type="number" value={hl.projectedDefault || ''} placeholder="—"
+              onChange={(e) => { const v = +e.target.value || 0; editHl((h) => { h.projectedDefault = v; }); }} /></label>
+            <div><span className="muted small">Events (the first is listed first in the legend):</span>{' '}
+              <EventChips state={state} ids={hl.eventIds} onChange={(ids) => editHl((h) => { h.eventIds = ids; })} />{' '}
+              <select className="tag-add" title="Add every event in a group" value="" onChange={(e) => {
+                const g = e.target.value;
+                if (g) editHl((h) => { h.eventIds = [...h.eventIds, ...state.events.filter((x) => x.group === g && !h.eventIds.includes(x.id)).map((x) => x.id)]; });
+              }}>
+                <option value="" hidden>+ group</option>
+                {groups.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div><ConfirmButton label="Delete highlight" onConfirm={() => { update((d) => { delete d.config.highlight; }); setShow('app'); setHlOpen(false); }} /></div>
+          </div>}
+        </div>
+      )}
       <div className={indivLegend ? 'legend legend-rows' : 'legend'}>
         {indivLegend && <>
           <div className="legend-row">
@@ -249,12 +289,13 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
           ))}
         </div>
       </div>
-      {uploading && <MapUpload state={state} update={update} onClose={() => setUploading(false)} />}
-      {!uploading && !state.config.maps.length && <p className="muted">No floor plans yet. Open a data package from More ▾, or click “Upload floor plan” to add an SVG.</p>}
+      {!state.config.maps.length && <p className="muted">No floor plans yet. Open a data package from More ▾, or use “Upload floor plan” at the bottom to add an SVG.</p>}
       <div className="maps" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onClick={onClick}>
         {rendered.map(({ b, svg }) => (
-          <figure key={b} className="map"><figcaption>{b} <span className="no-print map-del" onClick={(e) => e.stopPropagation()}>
+          <figure key={b} className={pick?.map === b ? 'map picking' : 'map'} data-map={b}><figcaption>{b} <span className="no-print map-del" onClick={(e) => e.stopPropagation()}>
+            <button className="link" aria-expanded={extrasOpen === b} onClick={() => { setExtrasOpen(extrasOpen === b ? null : b); setPick(null); }}>{extrasOpen === b ? '▾' : '▸'} Legend &amp; kept colors</button>{' '}
             <ConfirmButton label="Delete floor plan" onConfirm={() => update((d) => { d.config.maps = d.config.maps.filter((m) => m.name !== b); })} /></span></figcaption>
+            {extrasOpen === b && <MapExtras state={state} update={update} name={b} pick={pick?.map === b ? pick.key : null} setPick={(key) => setPick(key ? { map: b, key } : null)} />}
             {svg ? <div dangerouslySetInnerHTML={{ __html: svg }} /> : <p>Loading…</p>}
           </figure>
         ))}
@@ -272,6 +313,10 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
             })}
           </svg>
         </figure>
+      </div>
+      <div className="same-colors no-print upload-section">
+        <button className="group-toggle" aria-expanded={uploading} onClick={() => setUploading(!uploading)}>{uploading ? '▾' : '▸'} <b>Upload floor plan</b></button>
+        {uploading && <MapUpload state={state} update={update} onClose={() => setUploading(false)} />}
       </div>
       {!edit && hover && hRoom && (
         <div className="tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>

@@ -1,8 +1,45 @@
 import { useState } from 'react';
-import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, uid, type Category } from '../lib/model';
+import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, ruleType, uid, type Category, type Room, type State, type Updater } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
+
+const SHEET_FILL = '#d9ead3';
+
+function renameType(d: State, from: string, to: string) {
+  const key = <T,>(o: Record<string, T> | undefined) => { if (o && from in o) { o[to] = o[from]; delete o[from]; } };
+  d.rooms.forEach((r) => { if (r.type === from) r.type = to; });
+  d.config.roomTypes = d.config.roomTypes.map((t) => (t === from ? to : t));
+  key(d.typeTags); key(d.config.typeRules); key(d.config.sheetTypeFill);
+  d.capTypes.forEach((c) => key(c.formulas));
+  d.config.proctors?.listed.forEach((m) => { if (m.field === 'type' && m.value === from) m.value = to; });
+}
+
+/** Text box that saves on Enter or when it loses focus. */
+function CommitInput({ value, onCommit, ...rest }: { value: string; onCommit: (v: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const done = () => { if (draft !== null && draft !== value) onCommit(draft.trim()); setDraft(null); };
+  return <input {...rest} value={draft ?? value} onChange={(e) => setDraft(e.target.value)} onBlur={done}
+    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setDraft(null); }} />;
+}
+
+/** A room's type: pick or type a new one; with type rules, clear it to follow the rules. */
+function TypeCell({ state, update, r, rules }: { state: State; update: Updater; r: Room; rules: boolean }) {
+  const auto = rules && !!r.typeAuto;
+  const res = rules ? ruleType(state, r) : {};
+  const commit = (v: string) => update((d) => {
+    const x = d.rooms.find((y) => y.id === r.id)!;
+    if (!v) { if (rules) x.typeAuto = true; return; }
+    x.type = v; delete x.typeAuto;
+    if (!d.config.roomTypes.includes(v)) d.config.roomTypes.push(v);
+  });
+  return (
+    <td className={rules && !auto ? 'ovr' : ''} title={auto ? (res.error ?? 'From the type rules') : rules ? 'Set by hand. Clear to use the type rules' : undefined}>
+      <CommitInput className="type-in" list="room-types" value={auto ? '' : r.type} placeholder={auto ? (res.type ?? r.type) : ''}
+        onCommit={commit} aria-label={`Room type of ${r.name}`} />
+    </td>
+  );
+}
 
 export default function RoomsView({ state, update }: ViewProps) {
   const [newCap, setNewCap] = useState('');
@@ -14,6 +51,36 @@ export default function RoomsView({ state, update }: ViewProps) {
   const tagIdsOf = (t: string) => state.typeTags[t] ?? [];
   const groupNames = [...new Set([...(state.config.eventGroups ?? []), ...state.events.map((e) => e.group).filter(Boolean)])];
   const setTypeTags = (t: string, ids: string[]) => update((d) => { d.typeTags[t] = ids; });
+  const rules = Object.values(state.config.typeRules ?? {}).some((x) => x.trim());
+  const [newType, setNewType] = useState('');
+  const [typeMsg, setTypeMsg] = useState('');
+  const addType = () => {
+    const t = newType.trim();
+    if (!t || types.includes(t)) return setTypeMsg('Pick a new type name.');
+    setTypeMsg('');
+    update((d) => { d.config.roomTypes = [...roomTypes(d), t]; });
+    setNewType('');
+  };
+  const [newRoom, setNewRoom] = useState({ name: '', building: '' });
+  const [roomMsg, setRoomMsg] = useState('');
+  const buildings = [...new Set(state.rooms.map((r) => r.building).filter(Boolean))].sort();
+  const addRoom = () => {
+    const name = newRoom.name.trim();
+    if (!name) return setRoomMsg('A room needs a name.');
+    if (state.rooms.some((r) => r.name === name)) return setRoomMsg(`${name} already exists.`);
+    const stem = name.replace(/[^A-Za-z0-9]+/g, '') || 'Room';
+    let id = stem, n = 2;
+    while (state.rooms.some((r) => r.id === id)) id = `${stem}${n++}`;
+    setRoomMsg('');
+    update((d) => { d.rooms.push({ id, name, building: newRoom.building.trim(), type: types[0] ?? 'Other', base: null, overrides: {}, status: 'Yes', ...(rules ? { typeAuto: true } : {}) }); });
+    setNewRoom({ name: '', building: '' });
+  };
+  const setRoomField = (id: string, k: 'name' | 'building', v: string) => update((d) => { d.rooms.find((x) => x.id === id)![k] = v; });
+  const moveType = (i: number, by: number) => update((d) => {
+    const l = roomTypes(d); const j = i + by;
+    if (j < 0 || j >= l.length) return;
+    [l[i], l[j]] = [l[j], l[i]]; d.config.roomTypes = l;
+  });
 
   const addCap = () => {
     const id = newCap.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -53,6 +120,42 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
+
+      <h2>Room types</h2>
+      <p className="muted">
+        A room's type picks its capacity formulas and tags. A rule sets the type from the room's <code>[Raw]</code>, e.g. <code>[Raw] &gt;= 150</code> or <code>[Raw] &gt;= 40 and [Raw] &lt; 150</code>;
+        rules are checked top to bottom and the first true one wins. Clear a room's type below to use the rules; a type picked or typed there overrides them.
+        Sheet color fills the type's room headers in the Google Sheet.
+      </p>
+      <table className="table room-types">
+        <thead><tr><th>Type</th><th>Rule</th><th>Sheet color</th><th>Rooms</th><th></th><th></th></tr></thead>
+        <tbody>
+          {types.map((t, i) => {
+            const n = state.rooms.filter((r) => r.type === t).length;
+            return (
+              <tr key={t}>
+                <td><CommitInput value={t} aria-label="Type name" onCommit={(v) => {
+                  if (!v || types.includes(v)) return setTypeMsg(v ? `${v} already exists.` : 'A type needs a name.');
+                  setTypeMsg(''); update((d) => renameType(d, t, v));
+                }} /></td>
+                <td><input className="mono" value={state.config.typeRules?.[t] ?? ''} placeholder="—" aria-label={`Rule for ${t}`}
+                  onChange={(e) => { const v = e.target.value; update((d) => { const m = (d.config.typeRules ??= {}); if (v) m[t] = v; else delete m[t]; }); }} /></td>
+                <td><ColorPicker value={state.config.sheetTypeFill?.[t] ?? SHEET_FILL} existing={usedColors(state)}
+                  onChange={(x) => update((d) => { (d.config.sheetTypeFill ??= {})[t] = x; })} /></td>
+                <td>{n}</td>
+                <td className="nowrap"><button title="Move up" disabled={!i} onClick={() => moveType(i, -1)}>↑</button><button title="Move down" disabled={i === types.length - 1} onClick={() => moveType(i, 1)}>↓</button></td>
+                <td><button className="danger" disabled={n > 0} title={n ? `${n} rooms use ${t}` : undefined} onClick={() => update((d) => {
+                  d.config.roomTypes = d.config.roomTypes.filter((x) => x !== t);
+                  delete d.typeTags[t]; delete d.config.typeRules?.[t]; delete d.config.sheetTypeFill?.[t];
+                  d.capTypes.forEach((c) => delete c.formulas[t]);
+                })}>Delete</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p><input value={newType} placeholder="New room type" onChange={(e) => setNewType(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addType()} /> <button onClick={addType}>+ Add room type</button>{typeMsg && <span className="warn"> {typeMsg}</span>}</p>
+      <datalist id="room-types">{types.map((t) => <option key={t} value={t} />)}</datalist>
 
       <h2>Tags</h2>
       <p className="muted">Tags are for coloring maps. You can choose whether a color shows on the internal map or the external map. The tag of a room is determined by its events. Only rooms with status Yes are colored on the map.</p>
@@ -97,18 +200,20 @@ export default function RoomsView({ state, update }: ViewProps) {
       <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: defaultColor(d), internal: true, external: false }); })}>+ Add tag</button></p>
 
       <h2>Rooms</h2>
-      <p className="muted"><span className="ovr-key">Highlighted</span> cells are overrides. Clear a cell to go back to the formula. Only rooms set to <b>Yes</b> appear on the Schedule and floor plans and count toward capacity and proctors.</p>
+      <p className="muted"><span className="ovr-key">Highlighted</span> cells are overrides (room types only once a type rule exists). Clear a cell to go back to the formula. Only rooms set to <b>Yes</b> appear on the Schedule and floor plans and count toward capacity and proctors.</p>
       <table className="table rooms">
-        <thead><tr><th>Room</th><th title="Only Yes rooms are scheduled or counted">Status</th><th>Building</th><th>Room type</th><th>[Raw]</th>{editable.map((c) => <th key={c.id}>{c.name}</th>)}</tr></thead>
+        <thead><tr><th>Room</th><th title="Only Yes rooms are scheduled or counted">Status</th><th>Building</th><th>Room type</th><th>[Raw]</th>{editable.map((c) => <th key={c.id}>{c.name}</th>)}<th></th></tr></thead>
         <tbody>
           {state.rooms.map((r) => (
             <tr key={r.id} className={roomActive(r) ? undefined : 'inactive'}>
-              <td><b>{r.name}</b></td>
+              <td><CommitInput className="room-name-in" value={r.name} aria-label={`Name of ${r.name}`} onCommit={(v) => {
+                if (!v) return setRoomMsg('A room needs a name.');
+                setRoomMsg(''); setRoomField(r.id, 'name', v);
+              }} /></td>
               <td><select value={r.status ?? ''} onChange={(e) => update((d) => { d.rooms.find((x) => x.id === r.id)!.status = e.target.value; })}>
                 <option value="">—</option>{ROOM_STATUSES.map((x) => <option key={x}>{x}</option>)}</select></td>
-              <td>{r.building}</td>
-              <td><select value={r.type} onChange={(e) => update((d) => { d.rooms.find((x) => x.id === r.id)!.type = e.target.value; })}>
-                {types.map((t) => <option key={t}>{t}</option>)}</select></td>
+              <td><CommitInput className="type-in" list="room-buildings" value={r.building} aria-label={`Building of ${r.name}`} onCommit={(v) => setRoomField(r.id, 'building', v)} /></td>
+              <TypeCell state={state} update={update} r={r} rules={rules} />
               <td><input type="number" className="numin" value={r.base ?? ''} placeholder="—"
                 onChange={(e) => update((d) => { d.rooms.find((x) => x.id === r.id)!.base = e.target.value === '' ? null : +e.target.value; })} /></td>
               {editable.map((c) => {
@@ -124,8 +229,43 @@ export default function RoomsView({ state, update }: ViewProps) {
                   </td>
                 );
               })}
+              <td><ConfirmButton onConfirm={() => update((d) => {
+                d.rooms = d.rooms.filter((x) => x.id !== r.id);
+                d.blocks = d.blocks.filter((b) => b.roomId !== r.id);
+                if (d.config.proctors) d.config.proctors.listed = d.config.proctors.listed.filter((m) => !(m.field === 'room' && m.value === r.id));
+                d.config.maps.forEach((m) => { if (m.keepOrig) m.keepOrig = m.keepOrig.filter((x) => x !== r.id); });
+              })} /></td>
             </tr>
           ))}
+        </tbody>
+      </table>
+      <datalist id="room-buildings">{buildings.map((b) => <option key={b} value={b} />)}</datalist>
+      <p><input value={newRoom.name} placeholder="New room name" aria-label="New room name" onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && addRoom()} />{' '}
+        <input list="room-buildings" value={newRoom.building} placeholder="Building" aria-label="New room building" onChange={(e) => setNewRoom({ ...newRoom, building: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && addRoom()} />{' '}
+        <button onClick={addRoom}>+ Add room</button>{roomMsg && <span className="warn"> {roomMsg}</span>}</p>
+      <p className="muted small">Deleting a room also removes its scheduled events. Floor plan shapes matched to it then show as “Not in rooms list”.</p>
+
+      <h3>Buildings</h3>
+      <p className="muted small">Worked out from the Building column above. Renaming a building here renames it for all its rooms.</p>
+      <table className="buildings">
+        <thead><tr><th>Building</th><th>Rooms</th><th>Room list</th></tr></thead>
+        <tbody>
+          {buildings.map((b) => {
+            const rs = state.rooms.filter((r) => r.building === b);
+            return (
+              <tr key={b}>
+                <td><CommitInput className="room-name-in" value={b} aria-label={`Building name ${b}`} onCommit={(v) => {
+                  if (!v || v === b) return;
+                  update((d) => {
+                    d.rooms.forEach((r) => { if (r.building === b) r.building = v; });
+                    d.config.proctors?.listed.forEach((m) => { if (m.field === 'building' && m.value === b) m.value = v; });
+                  });
+                }} /></td>
+                <td>{rs.length}</td>
+                <td className="small">{rs.map((r) => r.name).join(', ')}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

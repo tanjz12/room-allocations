@@ -1,5 +1,6 @@
 // Tiny safe expression evaluator: numbers, identifiers, + - * / ( ), and
-// floor/ceil/round(x[, step]), min(...), max(...). Bracketed names like [Raw] are identifiers.
+// floor/ceil/round(x[, step]), min(...), max(...), comparisons (< <= > >= = !=, true = 1) and `and` / `or`.
+// Bracketed names like [Raw] are identifiers.
 type Tok = { t: 'num' | 'id' | 'op'; v: string };
 
 function tokenize(s: string): Tok[] {
@@ -21,7 +22,9 @@ function tokenize(s: string): Tok[] {
       if (j < 0) throw new Error('Missing "]"');
       out.push({ t: 'id', v: s.slice(i, j + 1) }); i = j + 1; continue;
     }
-    if ('+-*/(),'.includes(c)) { out.push({ t: 'op', v: c }); i++; continue; }
+    const two = s.slice(i, i + 2);
+    if (['<=', '>=', '!=', '=='].includes(two)) { out.push({ t: 'op', v: two === '==' ? '=' : two }); i += 2; continue; }
+    if ('+-*/(),<>='.includes(c)) { out.push({ t: 'op', v: c }); i++; continue; }
     throw new Error(`Unexpected "${c}"`);
   }
   return out;
@@ -47,7 +50,7 @@ export function evaluate(expr: string, lookup: (name: string) => number): number
     if (!t) throw new Error('Unexpected end');
     if (t.t === 'num') { p++; return parseFloat(t.v); }
     if (t.v === '-') { p++; return -primary(); }
-    if (t.v === '(') { p++; const v = add(); eat(')'); return v; }
+    if (t.v === '(') { p++; const v = or(); eat(')'); return v; }
     if (t.t === 'id') {
       p++;
       if (peek()?.v === '(') {
@@ -71,7 +74,16 @@ export function evaluate(expr: string, lookup: (name: string) => number): number
     while (peek() && (peek().v === '+' || peek().v === '-')) { const o = eat().v; const r = mul(); v = o === '+' ? v + r : v - r; }
     return v;
   };
-  const v = add();
+  const CMP: Record<string, (a: number, b: number) => boolean> = { '<': (a, b) => a < b, '<=': (a, b) => a <= b, '>': (a, b) => a > b, '>=': (a, b) => a >= b, '=': (a, b) => a === b, '!=': (a, b) => a !== b };
+  const cmp = (): number => {
+    let v = add();
+    while (peek() && CMP[peek().v]) { const o = eat().v; v = +CMP[o](v, add()); }
+    return v;
+  };
+  const word = (w: string) => peek()?.t === 'id' && peek().v.toLowerCase() === w;
+  const and = (): number => { let v = cmp(); while (word('and')) { p++; const r = cmp(); v = +(!!v && !!r); } return v; };
+  const or = (): number => { let v = and(); while (word('or')) { p++; const r = and(); v = +(!!v || !!r); } return v; };
+  const v = or();
   if (p < toks.length) throw new Error(`Unexpected "${toks[p].v}"`);
   return v;
 }

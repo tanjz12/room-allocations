@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { emptyConfig, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
+import { emptyConfig, mergeLegendExtras, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
 
-/** Only rooms with status Yes are scheduled or counted. */
-export type Room = { id: string; name: string; building: string; type: string; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
+/** Only rooms with status Yes are scheduled or counted. `typeAuto`: the type comes from the room type rules instead of being set by hand. */
+export type Room = { id: string; name: string; building: string; type: string; typeAuto?: boolean; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
 export const ROOM_STATUSES = ['Yes', 'Need to Request', 'Awaiting Approval', 'No'];
 export const roomActive = (r: Room) => r.status === 'Yes';
 export type EventT = { id: string; name: string; color: string; start: number; end: number; startRef: TimeRef | null; endRef: TimeRef | null; capacityType: string; group: string; signName?: string; signHide?: boolean; signFirst?: boolean };
@@ -37,6 +37,21 @@ export const SLOTS: number[] = [];
 for (let t = DAY_START; t < DAY_END; t += SLOT) SLOTS.push(t);
 export const OTHER_GROUP = 'Other';
 export const roomTypes = (s: State) => [...new Set([...s.config.roomTypes, ...s.rooms.map((r) => r.type)])];
+/** The type the room type rules give a room: the first type whose condition holds for its [Raw]. */
+export function ruleType(s: State, r: Room): { type?: string; error?: string } {
+  if (r.base == null) return { error: `Room has no ${RAW_NAME} capacity` };
+  for (const t of roomTypes(s)) {
+    const expr = s.config.typeRules?.[t]?.trim();
+    if (!expr) continue;
+    try {
+      if (evaluate(expr, (name) => { if (name === RAW_NAME || name === 'base') return r.base!; throw new Error(`Unknown variable ${name}`); })) return { type: t };
+    } catch (e) { return { error: `${t}: ${(e as Error).message}` }; }
+  }
+  return { error: 'No rule matches' };
+}
+export function applyTypeRules(s: State) {
+  for (const r of s.rooms) if (r.typeAuto) { const t = ruleType(s, r).type; if (t) r.type = t; }
+}
 export const eventGroups = (s: State) => [...new Set([...s.config.eventGroups, OTHER_GROUP])];
 
 export const fmtTime = (m: number) => {
@@ -96,10 +111,13 @@ export function normalize(s: Partial<State>): State {
   const oldGc = [...(cfg.mapGroupColor ? [cfg.mapGroupColor] : []), ...(cfg.mapGroupColors ?? [])].filter((g) => g.group);
   if (oldGc.length && !cfg.sameColors?.length) cfg.sameColors = oldGc.map((g, i) => ({ id: `sc${i + 1}`, name: '', color: g.color, groups: [g.group], eventIds: [] }));
   delete cfg.mapGroupColor; delete cfg.mapGroupColors;
+  delete (cfg as Config & { spacing?: unknown }).spacing;
+  mergeLegendExtras(cfg);
   for (const c of out.categories) delete (c as Category & { hideOn?: unknown }).hideOn;
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
   if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));
   applyPhaseRefs(out);
+  applyTypeRules(out);
   out.version = STATE_VERSION;
   return out;
 }
@@ -155,18 +173,12 @@ export function roomEventsAt(s: State, roomId: string, t: number | null): EventT
 }
 
 export const overlaps = (a: EventT, b: EventT) => a.start < b.end && b.start < a.end;
-const spaced = (s: State, e: EventT) => !!s.config.spacing?.eventIds.includes(e.id);
-export function clashWith(s: State, a: EventT, b: EventT): 'overlap' | 'gap' | null {
-  if (overlaps(a, b)) return 'overlap';
-  const gap = s.config.spacing?.minutes ?? 0;
-  if (gap && (spaced(s, a) || spaced(s, b)) && a.start < b.end + gap && b.start < a.end + gap) return 'gap';
-  return null;
+export function clashWith(_s: State, a: EventT, b: EventT): 'overlap' | null {
+  return overlaps(a, b) ? 'overlap' : null;
 }
-export const clashMessage = (s: State, verb: string, n: EventT, room: string, c: EventT) => {
+export const clashMessage = (_s: State, verb: string, n: EventT, room: string, c: EventT) => {
   const t = (e: EventT) => `${e.name} ${fmtTime(e.start)}–${fmtTime(e.end)}`;
-  return clashWith(s, n, c) === 'gap'
-    ? `Can't ${verb} ${t(n)}: ${s.config.spacing?.label ?? 'these events'} need ${s.config.spacing?.minutes} minutes between events, and ${room} has ${t(c)}.`
-    : `Can't ${verb} ${t(n)}: ${room} already has ${t(c)}.`;
+  return `Can't ${verb} ${t(n)}: ${room} already has ${t(c)}.`;
 };
 
 const KEY = 'room-alloc-v2';
@@ -180,7 +192,7 @@ export function useAppState() {
   });
   useEffect(() => { if (state.version) localStorage.setItem(KEY, JSON.stringify(state)); }, [state]);
   const update = (fn: (draft: State) => void) =>
-    setState((prev) => { const d = structuredClone(prev); fn(d); return d; });
+    setState((prev) => { const d = structuredClone(prev); fn(d); applyTypeRules(d); mergeLegendExtras(d.config); return d; });
   return { state, setState, update };
 }
 export type Updater = (fn: (draft: State) => void) => void;

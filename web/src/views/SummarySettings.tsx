@@ -35,7 +35,7 @@ function SuggestAdd({ options, onPick, placeholder, label }: { options: Suggesti
 }
 
 /** Chips for a list of event ids, with × to remove and a type-to-search box to add. */
-function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[]; onChange: (ids: string[]) => void; pool?: string[] }) {
+export function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[]; onChange: (ids: string[]) => void; pool?: string[] }) {
   const name = (id: string) => state.events.find((e) => e.id === id)?.name ?? id;
   const free = state.events.filter((e) => !ids.includes(e.id) && (!pool || pool.includes(e.id)));
   return (

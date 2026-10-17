@@ -64,7 +64,8 @@ export function usedColors(s: State): string[] {
     ...s.events.map((e) => e.color), ...s.categories.map((c) => c.color), ...s.phases.map((p) => p.color),
     ...(s.config.sameColors ?? []).map((c) => c.color), ...(s.config.colorOptions ?? []).flatMap((o) => o.colors.map((c) => c.color)),
     ...Object.values(s.mapColors ?? {}),
-    ...s.config.maps.flatMap((m) => [m.floor, ...(m.legendExtra ?? []).map((x) => x.color), ...svgFills(m.svg)]),
+    ...(s.config.legendExtras ?? []).map((x) => x.color),
+    ...s.config.maps.flatMap((m) => [m.floor, ...svgFills(m.svg)]),
   ];
   return [...new Set(cs.filter(Boolean).map((c) => normalizeColor(c) ?? c.toLowerCase()))];
 }

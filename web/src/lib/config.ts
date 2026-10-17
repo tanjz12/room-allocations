@@ -2,7 +2,9 @@
 export type MapRoomMeta = { orig: string; box: number[]; added?: boolean; glyphs?: number };
 export type MapMeta = { rooms: Record<string, MapRoomMeta[]>; legend: { x: number; y: number; w: number; h: number; step: number }; width: number; height: number };
 /** `keepOrig`: rooms that keep their template color when unused; `labels`: label text for added room labels (default: id without its leading capitals). */
-export type MapDef = { name: string; svg: string; meta: MapMeta; floor: string; legendSlots: number; keepOrig?: string[]; legendExtra?: { key: string; label: string; color: string }[]; labels?: Record<string, string> };
+/** A legend entry for shapes that aren't rooms (stairs, elevators…), shared by all floor plans. */
+export type LegendExtra = { key: string; label: string; color: string };
+export type MapDef = { name: string; svg: string; meta: MapMeta; floor: string; legendSlots: number; keepOrig?: string[]; legendExtra?: LegendExtra[]; legendKeys?: string[]; labels?: Record<string, string> };
 /** A set of events shown together on Floor plans with counts and percentages of a projected total. */
 export type Highlight = { label: string; title: string; eventIds: string[]; leadId?: string; projectedDefault: number };
 /** Events listed together under one heading on Events, sharing start/end. */
@@ -19,17 +21,18 @@ export type RoomMatch = { field: 'type' | 'building' | 'status' | 'room'; value:
 export type Proctors = {
   minCap: string; idealCap: string; listed: RoomMatch[]; pills: ProctorPill[]; note?: string;
 };
-/** Events in `eventIds` need `minutes` free before and after them in the same room. */
-export type Spacing = { eventIds: string[]; minutes: number; label: string };
 /** Floor plans (color by event): rooms with any of these event groups or events share one color. */
 export type SameColor = { id: string; name: string; color: string; groups: string[]; eventIds: string[] };
 /** A saved set of same-color groupings, offered in the floor plans' Show menu. */
 export type ColorOption = { id: string; name: string; colors: SameColor[] };
 export type Config = {
   title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
-  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing; sameColors?: SameColor[]; colorOptions?: ColorOption[];
+  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; sameColors?: SameColor[]; colorOptions?: ColorOption[];
   maps: MapDef[]; notes?: Record<string, string>;
   drive?: DriveConfig; sheetTypeFill?: Record<string, string>;
+  /** Room type rules: a room following the rules gets the first type (in `roomTypes` order) whose condition on [Raw] is true. */
+  typeRules?: Record<string, string>;
+  legendExtras?: LegendExtra[];
   /** Phase timelines this data uses (none on a blank site), e.g. BMT's External and Internal schedules. */
   phaseSchedules?: PhaseSchedule[];
   /** Key of the phase schedule whose times events linked to a phase follow. */
@@ -64,3 +67,19 @@ export const exportName = (title: string, base: string) =>
 export const emptyConfig = (): Config => ({ title: DEFAULT_TITLE, roomTypes: [], eventGroups: [], eventOrder: [], summaryEventIds: [], maps: [] });
 
 export type PhaseSchedule = { key: string; name: string };
+
+/** Moves per-map legend entries (older packages, new uploads) into the shared list, matching by key, then by label. */
+export function mergeLegendExtras(cfg: Config) {
+  for (const m of cfg.maps) {
+    if (!m.legendExtra) continue;
+    const all = (cfg.legendExtras ??= []);
+    for (const x of m.legendExtra) {
+      const lab = x.label.trim().toLowerCase();
+      let g = all.find((y) => y.key === x.key) ?? all.find((y) => !!lab && y.label.trim().toLowerCase() === lab);
+      if (!g) all.push(g = { ...x });
+      else if (g.key !== x.key) m.svg = m.svg.split(`data-extra="${x.key}"`).join(`data-extra="${g.key}"`);
+      if (!m.legendKeys?.includes(g.key)) m.legendKeys = [...(m.legendKeys ?? []), g.key];
+    }
+    delete m.legendExtra;
+  }
+}
