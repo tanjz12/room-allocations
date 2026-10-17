@@ -7,11 +7,14 @@ export type MapDef = { name: string; svg: string; meta: MapMeta; floor: string; 
 export type Highlight = { label: string; title: string; eventIds: string[]; leadId?: string; projectedDefault: number };
 /** Events listed together under one heading on Events, sharing start/end. */
 export type Subgroup = { name: string; eventIds: string[]; afterId?: string };
-export type ProctorRow = { label: string; eventIds: string[] };
-/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot before/after the split phase (or of the whole day without `halves`). */
+/** A count line in a proctor pill: rooms used by `eventIds` (none = rooms at the pill's busiest slot), optionally only the rooms listed one by one or only the others. */
+export type ProctorLine = { label: string; eventIds: string[]; rooms?: 'listed' | 'others' };
+/** Where a pill's time range starts or ends: a phase's start or end, or a time in minutes. Missing = start / end of the day. */
+export type PillBound = { phaseId: string; edge: 'start' | 'end' } | { time: number };
+export type ProctorPill = { id: string; name: string; from?: PillBound; to?: PillBound; lines: ProctorLine[] };
+/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot of each pill's time range. */
 export type Proctors = {
-  group: string; excludeIds: string[]; splitPhaseId?: string; halves?: [string, string];
-  minCap: string; idealCap: string; bigType: string; smallLabel: string; rows: ProctorRow[]; note?: string;
+  group: string; excludeIds: string[]; minCap: string; idealCap: string; bigType: string; pills: ProctorPill[]; note?: string;
 };
 /** Events in `eventIds` need `minutes` free before and after them in the same room. */
 export type Spacing = { eventIds: string[]; minutes: number; label: string };

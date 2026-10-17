@@ -1,4 +1,4 @@
-import { phaseTimes, DAY_END, DAY_START, SLOT, eventTotals, fmtTime, proctorHalves, proctorLabel, roomActive, roomCapacity, summaryTotalValue, textColor, type State } from './model';
+import { phaseTimes, DAY_END, DAY_START, SLOT, eventTotals, fmtTime, proctorPills, roomActive, roomCapacity, summaryTotalValue, textColor, type State } from './model';
 import { PACKAGE_FORMAT, makePackage, packageText, readPackage } from './package';
 import { PPTX_MIME } from './signs';
 import { emptyConfig, type DriveConfig, type DriveFolder } from './config';
@@ -174,7 +174,7 @@ export function sheetView(s: State) {
   const summary: [string, string | number][] = [
     ...s.summaryTotals.map((x): [string, number] => [`${x.label} Capacity`, summaryTotalValue(s, x)]),
     ...s.config.summaryEventIds.map((id) => totals.find((x) => x.e.id === id)).filter((x) => !!x).map((x): [string, number] => [x.e.name, x.total]),
-    ...proctorHalves(s).map((h): [string, string] => [proctorLabel(h.label), `${h.min.n} min · ${h.ideal.n} ideal`]),
+    ...proctorPills(s).map((h): [string, string] => [h.pill.name, `${h.min.n} min · ${h.ideal.n} ideal`]),
   ];
   return { caps, rooms, summary };
 }

@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
-import { eventTotals, fmtTime, procRooms, proctorHalves, proctorLabel, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
+import { eventAt, eventTotals, fmtTime, procRooms, proctorPills, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
+import type { ProctorLine } from '../lib/config';
 import { Swatch, type ViewProps } from './common';
 import SummarySettings from './SummarySettings';
 
@@ -32,36 +33,27 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
     return [
       ...[...byType].map(([t, n]) => ({ key: t, node: `${n} ${t}` })),
       ...rooms.filter(({ r }) => big(r)).sort((x, y) => x.r.name.localeCompare(y.r.name))
-        .map(({ r }) => ({ key: r.id, node: <>{r.name} {procInput(r)}</> })),
+        .map(({ r }) => ({ key: r.id, node: <span className="nowrap">{r.name} {procInput(r)}</span> })),
     ];
   };
-  const joinPlus = (parts: Part[], lead = false) =>
-    parts.map((p, i) => <Fragment key={p.key}>{i ? ' + ' : lead ? '+ ' : ''}{p.node}</Fragment>);
-  const breakdown = (rooms: ProcRoom[]) => {
-    const parts = breakdownParts(rooms);
-    return parts.length ? joinPlus(parts) : 'No rooms';
+  const joinPlus = (parts: Part[]) =>
+    parts.map((p, i) => <Fragment key={p.key}>{i ? ' + ' : ''}{p.node}</Fragment>);
+  const pills = proctorPills(state);
+  type PillRes = (typeof pills)[number];
+  const lineRooms = (h: PillRes, l: ProctorLine) => {
+    const rooms = l.eventIds.length
+      ? procRooms(state, state.blocks.filter((b) => {
+        const e = l.eventIds.includes(b.eventId) && state.events.find((x) => x.id === b.eventId);
+        return e && h.slots.some((t) => eventAt(e, t));
+      }).map((b) => b.roomId), minCap)
+      : h.min.rooms;
+    return rooms.filter(({ r }) => (l.rooms === 'listed' ? big(r) : l.rooms === 'others' ? !big(r) : true));
   };
-  const classroomProctors = (rooms: ProcRoom[]) =>
-    rooms.reduce((n, { r, v }) => n + (big(r) ? 0 : v), 0);
-  const oneDay = (rooms: ProcRoom[]) => {
-    const parts = breakdownParts(rooms);
-    const small = parts.filter((p) => !rooms.some(({ r }) => r.id === p.key && big(r)));
-    const bigParts = parts.filter((p) => !small.includes(p));
-    const bigN = rooms.reduce((n, { r, v }) => n + (big(r) ? v : 0), 0);
-    return [
-      small.length > 0 && <span key="s" className="muted small">{P?.smallLabel}: {joinPlus(small)}, {classroomProctors(rooms)} proctors</span>,
-      bigParts.length > 0 && <span key="b" className="muted small">{P?.bigType}: {joinPlus(bigParts)}, {bigN} proctors</span>,
-    ];
+  const line = (h: PillRes, l: ProctorLine, i: number) => {
+    const rooms = lineRooms(h, l);
+    if (!rooms.length) return null;
+    return <span key={i} className="muted small">{l.label && <>{l.label}: </>}{joinPlus(breakdownParts(rooms))}, {rooms.reduce((n, x) => n + x.v, 0)} proctors</span>;
   };
-  const twoLines = (rooms: ProcRoom[]) => {
-    const parts = breakdownParts(rooms);
-    if (!parts.length) return ['No rooms'];
-    const k = Math.ceil(parts.length / 2);
-    return [parts.slice(0, k), parts.slice(k)].filter((l) => l.length).map((l, i) => joinPlus(l, i > 0));
-  };
-  const roomsOf = (evIds: string[]) => procRooms(state, state.blocks.filter((b) => evIds.includes(b.eventId)).map((b) => b.roomId), minCap);
-  const morningRows = P?.rows ?? [];
-  const halves = proctorHalves(state);
   const stat = ({ e, total }: Row) => (
     <div key={e.id} className="stat" title={`${fmtTime(e.start)}–${fmtTime(e.end)}`} onClick={() => setTime(e.start)}>
       <span><Swatch color={e.color} />{e.name}</span>
@@ -91,22 +83,12 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
         {state.summaryTotals.map(totalStat)}
         {picked.map(stat)}
       </div>
-      {halves.length > 0 && <div className="summary">
-        {halves.map((h) => (
-          <div key={h.label} className="stat proctors">
-            <span>{proctorLabel(h.label)}</span>
+      {pills.length > 0 && <div className="summary">
+        {pills.map((h) => (
+          <div key={h.pill.id} className="stat proctors">
+            <span>{h.pill.name}</span>
             <b>{h.min.n} <small>min</small> · {h.ideal.n} <small>ideal</small></b>
-            {!P?.halves ? oneDay(h.min.rooms) : <>
-            {((h.first && morningRows.length > 0) || classroomProctors(h.min.rooms) > 0) && <span className="muted small">{P?.smallLabel}: {h.first && morningRows.length > 0
-              ? morningRows.map(({ label, eventIds }) => `${label} ${classroomProctors(roomsOf(eventIds))}`).join(' · ')
-              : classroomProctors(h.min.rooms)}</span>}
-            {!(h.first && morningRows.length > 0) && <>
-              {twoLines(h.min.rooms).map((line, i) => <span key={i} className="muted small">{line}</span>)}
-            </>}
-            {h.first && morningRows.map(({ label, eventIds }) => (
-              <span key={label} className="muted small">{label}: {breakdown(roomsOf(eventIds))}</span>
-            ))}
-            </>}
+            {h.pill.lines.map((l, i) => line(h, l, i))}
           </div>
         ))}
       </div>}

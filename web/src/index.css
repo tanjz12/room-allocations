@@ -164,7 +164,7 @@ header .confirm-in { width: 100px; }
 .stat { display: flex; flex-direction: column; gap: 2px; border: 1px solid #d6dde3; border-radius: 6px; padding: 6px 10px; min-width: 96px; background: #fff; cursor: pointer; }
 .stat > span:first-child { font-size: 12px; color: #555; white-space: nowrap; }
 .stat b { font-size: 20px; }
-.stat.proctors { cursor: default; min-width: 180px; }
+.stat.proctors { cursor: default; min-width: 180px; max-width: 460px; }
 .stat.proctors > span:first-child { font-weight: 700; color: #222; }
 .stat small { font-size: 12px; font-weight: 400; color: #555; }
 .small { font-size: 11px; }
@@ -292,3 +292,6 @@ h1.title { cursor: text; }
 }
 .proctor-settings th { position: static; width: 170px; white-space: nowrap; }
 .proctor-settings textarea { width: 100%; min-width: 320px; font: inherit; }
+.pill-edit { border: 1px solid #d6dde3; border-radius: 6px; padding: 6px 8px; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.pill-line { padding-left: 14px; }
+.nowrap { white-space: nowrap; }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { emptyConfig, type Config, type RoomSign } from './config';
+import { emptyConfig, type Config, type PillBound, type Proctors, type RoomSign } from './config';
 
 /** Only rooms with status Yes are scheduled or counted. */
 export type Room = { id: string; name: string; building: string; type: string; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
@@ -93,6 +93,7 @@ export function normalize(s: Partial<State>): State {
   for (const k of ['rooms', 'events', 'categories', 'blocks', 'capTypes', 'phases', 'summaryTotals'] as const) if (!Array.isArray(out[k])) (out as Record<string, unknown>)[k] = [];
   out.typeTags ??= {};
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
+  if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));
   applyPhaseRefs(out);
   out.version = STATE_VERSION;
   return out;
@@ -201,22 +202,42 @@ export const proctorLabel = (half: string) => (half ? `${half} proctors` : 'Proc
 export const procRooms = (state: State, roomIds: Iterable<string>, capId: string): ProcRoom[] =>
   [...new Set(roomIds)].map((id) => state.rooms.find((x) => x.id === id && roomActive(x))).filter((r) => !!r)
     .map((r) => ({ r, v: roomCapacity(state, r, capId).value ?? 0 }));
-/** Proctors needed at the busiest slot before and after the split phase, from the package's proctor rules. */
-export function proctorHalves(state: State) {
+const boundTime = (state: State, b: PillBound | undefined, dflt: number) => {
+  if (!b) return dflt;
+  if ('time' in b) return b.time;
+  const ph = state.phases.find((p) => p.id === b.phaseId);
+  return ph ? ph[b.edge] : dflt;
+};
+/** Each proctor pill's slots and the proctors needed at its busiest slot, from the package's proctor rules. */
+export function proctorPills(state: State) {
   const P = state.config.proctors;
   if (!P) return [];
-  const split = state.phases.find((p) => p.id === P.splitPhaseId);
-  const testing = state.events.filter((e) => e.group === P.group && !P.excludeIds.includes(e.id));
+  const counted = state.events.filter((e) => e.group === P.group && !P.excludeIds.includes(e.id));
   const proctorsAt = (t: number, capId: string) => {
-    const rooms = procRooms(state, state.blocks.filter((b) => testing.some((e) => e.id === b.eventId && eventAt(e, t))).map((b) => b.roomId), capId);
+    const rooms = procRooms(state, state.blocks.filter((b) => counted.some((e) => e.id === b.eventId && eventAt(e, t))).map((b) => b.roomId), capId);
     return { n: rooms.reduce((n, x) => n + x.v, 0), rooms };
   };
   const peak = (slots: number[], capId: string) =>
     slots.map((t) => proctorsAt(t, capId)).reduce((best, x) => (x.n > best.n ? x : best), { n: 0, rooms: [] as ProcRoom[] });
-  return (P.halves ? [
-    { label: P.halves[0], first: true, slots: SLOTS.filter((t) => t < (split?.start ?? 720)) },
-    { label: P.halves[1], first: false, slots: SLOTS.filter((t) => t >= (split?.end ?? 720)) },
-  ] : [{ label: '', first: false, slots: SLOTS }]).map((h) => ({ ...h, min: peak(h.slots, P.minCap), ideal: peak(h.slots, P.idealCap) }));
+  return P.pills.map((pill) => {
+    const from = boundTime(state, pill.from, -Infinity), to = boundTime(state, pill.to, Infinity);
+    const slots = SLOTS.filter((t) => t >= from && t < to);
+    return { pill, slots, min: peak(slots, P.minCap), ideal: peak(slots, P.idealCap) };
+  });
+}
+/** Turns the old morning/afternoon proctor settings into pills. */
+export function migrateProctors(P: Proctors & { splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] }) {
+  if (Array.isArray(P.pills)) return;
+  const at = (edge: 'start' | 'end'): PillBound => (P.splitPhaseId ? { phaseId: P.splitPhaseId, edge } : { time: 720 });
+  const small = P.smallLabel ?? 'Classrooms';
+  P.pills = P.halves ? [
+    { id: uid('pill'), name: proctorLabel(P.halves[0]), to: at('start'), lines: P.rows?.length ? P.rows.map((r) => ({ label: r.label, eventIds: r.eventIds })) : [{ label: '', eventIds: [] }] },
+    { id: uid('pill'), name: proctorLabel(P.halves[1]), from: at('end'), lines: [{ label: '', eventIds: [] }] },
+  ] : [{ id: uid('pill'), name: 'Proctors', lines: [
+    { label: small, eventIds: [], rooms: 'others' },
+    ...(P.bigType ? [{ label: P.bigType, eventIds: [], rooms: 'listed' as const }] : []),
+  ] }];
+  delete P.splitPhaseId; delete P.halves; delete P.smallLabel; delete P.rows;
 }
 /** Drops a deleted event from the summary settings. */
 export function forgetEvent(d: State, id: string) {
@@ -224,7 +245,7 @@ export function forgetEvent(d: State, id: string) {
   d.config.summaryEventIds = drop(d.config.summaryEventIds)!;
   for (const t of d.summaryTotals) if (t.eventIds?.includes(id)) delete t.eventIds;
   const P = d.config.proctors;
-  if (P) { P.excludeIds = drop(P.excludeIds)!; P.rows.forEach((r) => { r.eventIds = drop(r.eventIds)!; }); }
+  if (P) { P.excludeIds = drop(P.excludeIds)!; P.pills.forEach((p) => p.lines.forEach((l) => { l.eventIds = drop(l.eventIds)!; })); }
 }
 export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
   !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId
