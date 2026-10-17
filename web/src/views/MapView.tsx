@@ -167,15 +167,17 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     <div className="page floor-plans">
       <h2 className="print-only">Floor plans · {fmtTime(time)} · {showLabel} · colored by {colorBy === 'event' ? 'event' : 'tag'}</h2>
       <div className="toolbar no-print">
-        <button onClick={() => setUploading(true)} disabled={uploading}>Upload floor plan</button>
         <b>Time:</b> <TimePicker time={time} setTime={setTime} />
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="event">event</option><option value="category">tag</option></select></label>
         <label>Show <select value={show} onChange={(e) => setShow(e.target.value)}>
           <option value="app">All Events</option>
           {hl && <option value="focus">{hl.label}</option>}
           {options.map((o) => <option key={o.id} value={`opt:${o.id}`}>{o.name || 'Untitled option'}</option>)}</select></label>
-        <button onClick={() => window.print()}>Print</button>
-        <button onClick={downloadPdf} disabled={busy}>{busy ? 'Making PDF…' : 'Download PDF'}</button>
+        <span className="toolbar-actions">
+          <button onClick={() => setUploading(true)} disabled={uploading}>Upload floor plan</button>
+          <button onClick={() => window.print()}>Print</button>
+          <button onClick={downloadPdf} disabled={busy}>{busy ? 'Making PDF…' : 'Download PDF'}</button>
+        </span>
       </div>
       {colorBy === 'event' && show !== 'focus' && (
         <div className="same-colors no-print">
