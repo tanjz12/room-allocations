@@ -1,4 +1,3 @@
-import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import { parse, type Font, type Path } from 'opentype.js';
 import { roomActive, roomTags, type Block, type EventT, type Room, type State } from './model';
@@ -86,12 +85,12 @@ export function buildSigns(s: State): Sign[] {
   });
 }
 
-type TextItem = { kind: 'text'; text: string; x: number; y: number; size: number; color: string; anchor: 'start' | 'middle'; box: number; font: 'text' | 'number'; style?: NoteStyle };
+export type TextItem = { kind: 'text'; text: string; x: number; y: number; size: number; color: string; anchor: 'start' | 'middle'; box: number; font: 'text' | 'number'; style?: NoteStyle };
 const styled = (st?: NoteStyle) => !!st && !!(st.bold || st.italic || st.underline || st.strike);
 const SKEW = 0.21;
 /** Widest event line before every event line shrinks (about 7.3 in, as on the BmMT 2026 signs). */
 const EVENT_W = 526;
-type Item = TextItem
+export type Item = TextItem
   | { kind: 'rect'; x: number; y: number; w: number; h: number; color: string }
   | { kind: 'line'; x1: number; x2: number; y: number }
   | { kind: 'image'; x: number; y: number; w: number; h: number; src: string };
@@ -353,67 +352,6 @@ export async function signsPdf(signs: Sign[], cfg: SignConfig, fs: SignFontSet, 
     if (i % 8 === 7) await new Promise((r) => setTimeout(r));
   }
   return doc.output('blob');
-}
-
-/* ---------- Slides (.pptx; Drive converts it to Google Slides) ---------- */
-export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-const EMU = 12700;
-const e = (pt: number) => Math.round(pt * EMU);
-const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
-const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const rels = (rs: [string, string, string][]) =>
-  `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rs.map(([id, type, t]) => `<Relationship Id="${id}" Type="${type.startsWith('http') ? type : `${REL}/${type}`}" Target="${t}"/>`).join('')}</Relationships>`;
-const grp = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>';
-const xfrm = (x: number, y: number, w: number, h: number) => `<a:xfrm><a:off x="${e(x)}" y="${e(y)}"/><a:ext cx="${e(w)}" cy="${e(h)}"/></a:xfrm>`;
-const fill = (c: string) => `<a:solidFill><a:srgbClr val="${c.replace('#', '').toUpperCase()}"/></a:solidFill>`;
-const theme = (family: string) => `${XML}<a:theme ${NS} name="Signs"><a:themeElements><a:clrScheme name="Signs">${
-  [['dk1', '000000'], ['lt1', 'FFFFFF'], ['dk2', '1F1F1F'], ['lt2', 'EEEEEE'], ['accent1', '2735E4'], ['accent2', '4CAF50'], ['accent3', 'FFC107'], ['accent4', 'E91E63'], ['accent5', '00BCD4'], ['accent6', '9C27B0'], ['hlink', '0563C1'], ['folHlink', '954F72']]
-    .map(([n, v]) => `<a:${n}><a:srgbClr val="${v}"/></a:${n}>`).join('')}</a:clrScheme><a:fontScheme name="Signs"><a:majorFont><a:latin typeface="${esc(family)}"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="${esc(family)}"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme><a:fmtScheme name="Signs"><a:fillStyleLst>${'<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>'.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${'<a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>'.repeat(3)}</a:lnStyleLst><a:effectStyleLst>${'<a:effectStyle><a:effectLst/></a:effectStyle>'.repeat(3)}</a:effectStyleLst><a:bgFillStyleLst>${'<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>'.repeat(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`;
-
-function slideXml(items: Item[], families: { text: string; number: string }) {
-  let id = 2;
-  const shapes = items.map((it) => {
-    const n = id++;
-    if (it.kind === 'rect') return `<p:sp><p:nvSpPr><p:cNvPr id="${n}" name="Box"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(it.x, it.y, it.w, it.h)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill(it.color)}<a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
-    if (it.kind === 'line') return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${n}" name="Rule"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>${xfrm(it.x1, it.y, it.x2 - it.x1, 0)}<a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="${EMU}">${fill('#000000')}</a:ln></p:spPr></p:cxnSp>`;
-    if (it.kind === 'image') return `<p:pic><p:nvPicPr><p:cNvPr id="${n}" name="Logo"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(it.x, it.y, it.w, it.h)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
-    const x = it.anchor === 'middle' ? it.x - it.box / 2 : it.x;
-    const top = it.y - it.size * 1.0;
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${n}" name="Text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(x, top, it.box, it.size * 1.3)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="${it.anchor === 'middle' ? 'ctr' : 'l'}"/><a:r><a:rPr lang="en-US" sz="${Math.max(100, Math.round(it.size * 100))}"${it.style?.bold ? ' b="1"' : ''}${it.style?.italic ? ' i="1"' : ''}${it.style?.underline ? ' u="sng"' : ''}${it.style?.strike ? ' strike="sngStrike"' : ''} dirty="0">${fill(it.color)}<a:latin typeface="${esc(families[it.font])}"/></a:rPr><a:t>${esc(it.text)}</a:t></a:r></a:p></p:txBody></p:sp>`;
-  }).join('');
-  return `${XML}<p:sld ${NS}><p:cSld><p:spTree>${grp}${shapes}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
-}
-
-async function rasterLogo(l: Logo) {
-  const img = new Image();
-  await new Promise((ok, fail) => { img.onload = ok; img.onerror = () => fail(new Error("the logo couldn't be drawn")); img.src = l.src; });
-  const sc = 1200 / Math.max(l.w, l.h);
-  const c = document.createElement('canvas');
-  c.width = Math.round(l.w * sc); c.height = Math.round(l.h * sc);
-  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-  return c.toDataURL('image/png');
-}
-export async function signsPptx(signs: Sign[], cfg: SignConfig, fs: SignFontSet, logo: Logo | null): Promise<Blob> {
-  const z = new JSZip();
-  // Slides can't import SVG from .pptx, so an SVG logo goes in as a high-resolution PNG there.
-  const media = logo ? (isSvgLogo(logo.src) ? await rasterLogo(logo) : logo.src) : null;
-  const ext = media?.startsWith('data:image/jpeg') ? 'jpeg' : 'png';
-  z.file('[Content_Types].xml', `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>${signs.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')}</Types>`);
-  z.file('_rels/.rels', rels([['rId1', 'officeDocument', 'ppt/presentation.xml']]));
-  z.file('ppt/presentation.xml', `${XML}<p:presentation ${NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${signs.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 3}"/>`).join('')}</p:sldIdLst><p:sldSz cx="${e(SIGN_W)}" cy="${e(SIGN_H)}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
-  z.file('ppt/_rels/presentation.xml.rels', rels([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'theme', 'theme/theme1.xml'], ...signs.map((_, i): [string, string, string] => [`rId${i + 3}`, 'slide', `slides/slide${i + 1}.xml`])]));
-  z.file('ppt/theme/theme1.xml', theme(fs.text.family));
-  z.file('ppt/slideMasters/slideMaster1.xml', `${XML}<p:sldMaster ${NS}><p:cSld><p:spTree>${grp}</p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>`);
-  z.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'theme', '../theme/theme1.xml']]));
-  z.file('ppt/slideLayouts/slideLayout1.xml', `${XML}<p:sldLayout ${NS} type="blank"><p:cSld name="Blank"><p:spTree>${grp}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`);
-  z.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', rels([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']]));
-  if (media) z.file(`ppt/media/logo.${ext}`, media.split(',')[1], { base64: true });
-  signs.forEach((sg, i) => {
-    z.file(`ppt/slides/slide${i + 1}.xml`, slideXml(layoutSign(sg, cfg, fontsOf(fs), logo), { text: fs.text.family, number: fs.number.family }));
-    z.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ...(logo ? [['rId2', 'image', `../media/logo.${ext}`] as [string, string, string]] : [])]));
-  });
-  return z.generateAsync({ type: 'blob', mimeType: PPTX_MIME });
 }
 
 /** Uploaded logos are redrawn as PNG (max 600 px) so the PDF and Slides can embed them. */

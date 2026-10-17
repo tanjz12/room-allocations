@@ -40,7 +40,11 @@ export type Config = {
 };
 /** Room signs: `logo` is a PNG/JPEG data URL; `color` fills the room-number box. */
 /** Logo box in points: `logoSize` square, `logoX` its center from the left, `logoY` its top. */
-export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; boxStretch?: boolean; boxGap?: number; font?: SignFontFile; numberFont?: SignFontFile };
+export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; boxStretch?: boolean; boxGap?: number; typst?: TypstConfig; font?: SignFontFile; numberFont?: SignFontFile };
+/** A Typst file saved to Drive from the Typst editor. */
+export type TypstDriveFile = { id: string; name: string; folderId: string };
+/** Typst editor: `code` is unset until edited (the editor then shows code generated from the basic editor); `files` are extra uploads (base64). */
+export type TypstConfig = { code?: string; fileName?: string; files?: { name: string; data: string }[]; drive?: TypstDriveFile; driveFiles?: TypstDriveFile[] };
 /** Styling for a room's sign note. `font` picks the event font or the room-number font; bold and italic are drawn by the app (no extra font files). */
 export type NoteStyle = { size?: number; font?: 'text' | 'number'; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean };
 /** An uploaded TrueType font: `name` is its family name (also used in Google Slides), `data` the .ttf as base64. */

@@ -1,7 +1,6 @@
 import { phaseTimes, DAY_END, DAY_START, SLOT, eventTotals, fmtTime, proctorPills, roomActive, roomCapacity, summaryTotalValue, textColor, type State } from './model';
 import { PACKAGE_FORMAT, makePackage, packageText, readPackage } from './package';
-import { PPTX_MIME } from './signs';
-import { emptyConfig, type DriveConfig, type DriveFolder } from './config';
+import { emptyConfig, type DriveConfig, type DriveFolder, type TypstDriveFile } from './config';
 import { FOLDER_MIME, pickDrive } from './picker';
 
 /** OAuth client of the Google Cloud project "bmt-room-allocation"; client IDs are public. */
@@ -334,12 +333,28 @@ async function subfolder(parent: string, name: string): Promise<string> {
   return (await api('POST', '/drive/v3/files?supportsAllDrives=true&fields=id', JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parent] }))).id;
 }
 
-/** Saves the room signs as Google Slides (converted from .pptx) and a PDF in `folder`; files with the same name are replaced. */
-export async function saveSigns(folder: DriveFolder, name: string, make: () => Promise<{ pdf: Blob; pptx: Blob }>): Promise<{ slides: string; pdf: string }> {
+/** Saves the room signs PDF in `folder`, replacing a file with the same name. */
+export async function saveSignsPdf(folder: DriveFolder, name: string, make: () => Promise<Blob>): Promise<string> {
   await accessToken();
-  const { pdf, pptx } = await make();
-  const slides = await upload(folder.id, name, 'application/vnd.google-apps.presentation', pptx, PPTX_MIME);
-  return { slides, pdf: await upload(folder.id, `${name}.pdf`, 'application/pdf', pdf, 'application/pdf') };
+  return upload(folder.id, `${name}.pdf`, 'application/pdf', await make(), 'application/pdf');
+}
+
+/** A Typst file in Drive: Save updates it in place, Save as new creates another. */
+export type DriveText = TypstDriveFile;
+export async function saveTypst(text: string, file: DriveText | { folderId: string; name: string }): Promise<DriveText> {
+  await accessToken();
+  const id = 'id' in file ? file.id : undefined;
+  const meta = id ? {} : { name: file.name, mimeType: 'text/plain', parents: [file.folderId] };
+  const b = `b${Math.random().toString(36).slice(2)}`;
+  const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n`, text, `\r\n--${b}--`]);
+  const r = await api(id ? 'PATCH' : 'POST', `/upload/drive/v3/files${id ? `/${id}` : ''}?uploadType=multipart&supportsAllDrives=true&fields=id,name`, body, `multipart/related; boundary=${b}`);
+  return { id: r.id, name: r.name, folderId: file.folderId };
+}
+export async function readTypst(id: string): Promise<string> {
+  await accessToken();
+  const r = await fetch(`${API}/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token?.t}` } });
+  if (!r.ok) throw new Error(`${driveAccount() || 'this Google account'} can't open that Typst file (Google answered ${r.status})`);
+  return r.text();
 }
 
 /** Saves map files into subfolders of `folder` (e.g. "Internal Maps"); files with the same name are replaced. Returns the folder's link. */
