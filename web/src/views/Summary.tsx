@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { eventTotals, fmtTime, procRooms, proctorHalves, proctorLabel, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
 import { Swatch, type ViewProps } from './common';
+import SummarySettings from './SummarySettings';
 
 export default function Summary({ state, update, setTime }: Pick<ViewProps, 'state' | 'update' | 'setTime'>) {
   const rows = eventTotals(state);
@@ -68,7 +69,6 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
     </div>
   );
   const picked = state.config.summaryEventIds.map((id) => rows.find((x) => x.e.id === id)).filter((x) => !!x);
-  if (!state.summaryTotals.length && !picked.length && !P) return null;
   const only = (x: (typeof state.summaryTotals)[number]) => {
     const names = [...(x.eventGroups ?? []), ...(x.eventIds ?? []).map((id) => state.events.find((e) => e.id === id)?.name ?? id)];
     return names.length ? ` with ${names.join(' / ')} scheduled` : '';
@@ -86,7 +86,7 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
 
   return (
     <div className="summary-block">
-      <h2>Summary</h2>
+      {(state.summaryTotals.length > 0 || picked.length > 0 || !!P) && <><h2>Summary</h2>
       <div className="summary">
         {state.summaryTotals.map(totalStat)}
         {picked.map(stat)}
@@ -110,7 +110,11 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
           </div>
         ))}
       </div>}
-      {P?.note && <p className="muted small">{P.note}</p>}
+      {P?.note && <p className="muted small">{P.note}</p>}</>}
+      <details className="summary-edit">
+        <summary>Edit summary</summary>
+        <SummarySettings state={state} update={update} />
+      </details>
     </div>
   );
 }
