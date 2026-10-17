@@ -183,7 +183,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
       {colorBy === 'event' && show !== 'focus' && (
         <div className="same-colors no-print">
           <div><button className="group-toggle" aria-expanded={groupsOpen} title={groupsOpen ? 'Collapse' : 'Expand'} onClick={() => setGroupsOpen(!groupsOpen)}>
-            {groupsOpen ? '▾' : '▸'} <b>Color groups</b>{!groupsOpen && colors.length > 0 && <span className="muted"> · {colors.length}</span>}</button>{opt && <> · option name <input className="opt-name" value={opt.name} placeholder="Option name" aria-label="Option name"
+            {groupsOpen ? '▾' : '▸'} <b>Color groups</b>{!groupsOpen && colors.length > 0 && <span className="muted"> · {colors.length}</span>}</button>{opt && <> · name <input className="opt-name" value={opt.name} placeholder="Name" aria-label="Name"
             onChange={(e) => { const v = e.target.value; update((d) => { const o = d.config.colorOptions?.find((x) => x.id === opt.id); if (o) o.name = v; }); }} /></>}</div>
           {groupsOpen && <>
           {colors.map((c, i) => (
