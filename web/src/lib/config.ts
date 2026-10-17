@@ -44,7 +44,7 @@ export type SignConfig = { logo?: string; footer?: string; heading?: string; col
 /** Styling for a room's sign note. `font` picks the event font or the room-number font; bold and italic are drawn by the app (no extra font files). */
 export type NoteStyle = { size?: number; font?: 'text' | 'number'; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean };
 /** An uploaded TrueType font: `name` is its family name (also used in Google Slides), `data` the .ttf as base64. */
-export type SignFontFile = { name: string; data: string };
+export type SignFontFile = { name: string; data: string; google?: { family: string; weight: number } };
 /** Per-room sign overrides; blank fields fall back to the room's building and name. */
 export type RoomSign = { building?: string; floor?: string; label?: string; copies?: number; note?: string; hide?: boolean; noteStyle?: NoteStyle };
 /** Where Save/Load to Drive reads and writes; access is whatever the signed-in Google account has on these files. */

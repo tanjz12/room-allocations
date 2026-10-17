@@ -9,6 +9,7 @@ export default function Privacy({ onBack }: { onBack: () => void }) {
       <ul>
         <li><b>No accounts:</b> there's no login and no server of its own. The site runs in your browser.</li>
         <li><b>Your data:</b> data packages stay in your browser's local storage, or in the Google Drive files and folders you choose. This site doesn't receive or store them. Clearing site data, or More ▾ → Clear all data, removes them from the browser.</li>
+        <li><b>Fonts:</b> picking a Google font for room signs downloads the font list and font files from Fontsource (<code>api.fontsource.org</code>, <code>cdn.jsdelivr.net</code>). Nothing from your data is sent.</li>
         <li><b>Tracking:</b> no analytics, ads or other tracking, and the site sets no cookies of its own (see Cookies below). The site's host keeps standard request logs.</li>
       </ul>
       <h3>Google sign-in</h3>

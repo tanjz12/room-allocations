@@ -252,6 +252,37 @@ export function loadSignFont(f?: SignFontFile, kind: 'text' | 'number' = 'text')
   }
   return p;
 }
+export const DEFAULT_FONT = { family: 'IBM Plex Sans', weight: { text: 400, number: 500 } };
+export type GoogleFont = { id: string; family: string; weights: number[] };
+let googleList: Promise<GoogleFont[]> | null = null;
+/** Google Fonts via Fontsource, which serves CORS-enabled .ttf files (Google's own API only gives browsers woff2). */
+export function googleFonts(): Promise<GoogleFont[]> {
+  googleList ??= fetch('https://api.fontsource.org/v1/fonts?type=google')
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<(GoogleFont & { subsets: string[]; styles: string[] })[]>; })
+    .then((l) => l.filter((f) => f.subsets.includes('latin') && f.styles.includes('normal')).map(({ id, family, weights }) => ({ id, family, weights })));
+  googleList.catch(() => { googleList = null; });
+  return googleList;
+}
+const fontUrl = (id: string, w: number, ext: 'ttf' | 'woff2') => `https://cdn.jsdelivr.net/fontsource/fonts/${id}@latest/latin-${w}-normal.${ext}`;
+const previewed = new Set<string>();
+/** Loads a font under the name `gf-<id>` so the picker can show each family in its own face. */
+export function previewGoogleFont(f: GoogleFont) {
+  if (previewed.has(f.id)) return;
+  previewed.add(f.id);
+  new FontFace(`gf-${f.id}`, `url(${fontUrl(f.id, nearestWeight(f.weights, 400), 'woff2')})`).load().then((ff) => document.fonts.add(ff), () => {});
+}
+const WEIGHTS: Record<number, string> = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
+export const weightName = (w: number) => WEIGHTS[w] ?? String(w);
+export const nearestWeight = (ws: number[], w: number) => ws.reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a), ws[0] ?? 400);
+export async function googleFontFile(f: GoogleFont, weight: number): Promise<SignFontFile> {
+  const r = await fetch(fontUrl(f.id, weight, 'ttf')).catch(() => null);
+  if (!r?.ok) throw new Error(`couldn't download ${f.family}; try again or pick another font`);
+  const b = await r.arrayBuffer();
+  let font: Font;
+  try { font = parse(b); } catch { throw new Error(`${f.family} can't be read; pick another font`); }
+  if (font.outlinesFormat !== 'truetype') throw new Error(`${f.family} can't be embedded in the PDF; pick another font`);
+  return { name: weight === 400 ? f.family : `${f.family} ${weightName(weight)}`, data: toB64(b), google: { family: f.family, weight } };
+}
 /** Only TrueType outlines can be embedded by jsPDF, so CFF-based .otf files are refused. */
 export async function fontFromFile(file: File): Promise<SignFontFile> {
   const b = await file.arrayBuffer();

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NoteStyle, RoomSign, SignConfig } from '../lib/config';
-import { DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, fontFromFile, loadSignFont, logoBox, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
+import { DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, loadSignFont, logoBox, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
 import { pickFolder, saveSigns } from '../lib/drive';
 import type { ViewProps } from './common';
 import ColorPicker from './ColorPicker';
+import FontControl from './FontControl';
 import { usedColors } from '../lib/colors';
 
 const download = (blob: Blob, name: string) => {
@@ -15,12 +16,11 @@ const download = (blob: Blob, name: string) => {
 export default function SignsSection({ state, update }: ViewProps) {
   const cfg: SignConfig = state.config.signs ?? {};
   const [sf, setSf] = useState<SignFont | null>(null);
-  const fontRef = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState<Logo | null>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<{ err?: string; slides?: string; pdf?: string }>({});
   const [nf, setNf] = useState<SignFont | null>(null);
-  const numRef = useRef<HTMLInputElement>(null);
+  const [numOpen, setNumOpen] = useState(false);
   const [noteEd, setNoteEd] = useState<{ roomId: string; note: string; style: NoteStyle } | null>(null);
   const numName = cfg.numberFont?.name, numData = cfg.numberFont?.data, customText = !!cfg.font;
   useEffect(() => {
@@ -83,12 +83,7 @@ export default function SignsSection({ state, update }: ViewProps) {
     } catch (e) { setMsg({ err: e instanceof Error ? e.message : String(e) }); }
     setBusy('');
   };
-  const pickFont = async (f: File) => {
-    try { setCfg({ font: await fontFromFile(f) }); setMsg({}); } catch (e) { setMsg({ err: e instanceof Error ? e.message : String(e) }); }
-  };
-  const pickNumFont = async (f: File) => {
-    try { setCfg({ numberFont: await fontFromFile(f) }); setMsg({}); } catch (e) { setMsg({ err: e instanceof Error ? e.message : String(e) }); }
-  };
+  const fontErr = useCallback((err: string) => setMsg({ err }), []);
   const openNote = (roomId: string) => {
     const r = state.rooms.find((x) => x.id === roomId);
     setNoteEd({ roomId, note: r?.sign?.note ?? '', style: { ...(r?.sign?.noteStyle ?? {}) } });
@@ -115,18 +110,14 @@ export default function SignsSection({ state, update }: ViewProps) {
           <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <ColorPicker value={(cfg.color || DEFAULT_SIGN_COLOR)} existing={usedColors(state)} onChange={(e) => setCfg({ color: e })} /></label>
           <label>File name <input value={cfg.fileName ?? ''} placeholder="Room Signs" onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
           <div className="wide logo-place">
-            <b>Font</b> <span>{cfg.font ? cfg.font.name : 'IBM Plex Sans (built in)'}</span>
-            <button onClick={() => fontRef.current?.click()}>{cfg.font ? 'Replace font…' : 'Upload font…'}</button>
-            {cfg.font && <button onClick={() => setCfg({ font: undefined })}>Use built-in</button>}
-            <input ref={fontRef} type="file" accept=".ttf,font/ttf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void pickFont(f); }} />
-            <span className="muted">.ttf file. Google Slides only shows it if it's a Google Font; the PDF always does.</span>
+            <b>Font</b>
+            <FontControl value={cfg.font} kind="text" defaultLabel="IBM Plex Sans" onChange={(f) => { setCfg({ font: f }); setMsg({}); }} onError={fontErr} />
           </div>
           <div className="wide logo-place">
-            <b>Room number font</b> <span>{cfg.numberFont ? cfg.numberFont.name : cfg.font ? 'same as the event font' : 'IBM Plex Sans Medium (built in)'}</span>
-            <button onClick={() => numRef.current?.click()}>{cfg.numberFont ? 'Replace…' : 'Upload font…'}</button>
-            {cfg.numberFont && <button onClick={() => setCfg({ numberFont: undefined })}>Use default</button>}
-            <input ref={numRef} type="file" accept=".ttf,font/ttf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void pickNumFont(f); }} />
-            <span className="muted">e.g. a Medium weight .ttf for the number in the box</span>
+            <button className="group-toggle" aria-expanded={numOpen} title={numOpen ? 'Collapse' : 'Expand'} onClick={() => setNumOpen(!numOpen)}>{numOpen ? '▾' : '▸'} <b>Change room number font</b></button>
+            {numOpen
+              ? <FontControl value={cfg.numberFont} kind="number" inherits={!!cfg.font} defaultLabel={cfg.font ? 'Same as sign font' : 'IBM Plex Sans Medium'} onChange={(f) => { setCfg({ numberFont: f }); setMsg({}); }} onError={fontErr} />
+              : <span className="muted">{cfg.numberFont?.name ?? (cfg.font ? 'same as the sign font' : 'IBM Plex Sans Medium')}</span>}
           </div>
           {cfg.logo && <div className="wide logo-place">
             <b>Logo (inches)</b>
