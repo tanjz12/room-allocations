@@ -93,7 +93,7 @@ export default function ExportView(props: ViewProps) {
 
   return (
     <div className="page">
-      <h2>Generate maps</h2>
+      <h2>Maps &amp; Room signs</h2>
       <div className="toolbar">
         <b>Time:</b> <TimePicker time={time} setTime={setTime} />
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="category">tag</option><option value="event">event</option></select></label>

@@ -97,7 +97,7 @@ export default function SignsSection({ state, update }: ViewProps) {
   return (
     <section className="signs">
       <h2>Generate room signs</h2>
-      <p className="muted">One letter-size sign per room in use, listing its events in time order (each once, by the event's sign name; events marked “hide on signs” on Events &amp; tags are left off). Rooms with nothing scheduled get no sign.</p>
+      <p className="muted">One letter-size sign per room in use, listing its events in time order (each once, by the event's sign name; events marked “hide on signs” on Events are left off). Rooms with nothing scheduled get no sign.</p>
       <div className="sign-settings">
         <div className="sign-logo">
           {logo ? <img src={logo.src} alt="Sign logo" /> : <span className="muted">No logo</span>}

@@ -53,7 +53,7 @@ export default function RoomsView({ state, update }: ViewProps) {
       <h3>Summary totals</h3>
       <p className="muted">
         Shown first in the Schedule summary: the chosen capacity type added up over every room with the tag, whether or not it is scheduled
-        Event totals add up each event's own capacity type (set on Events &amp; tags) over the rooms assigned to it.
+        Event totals add up each event's own capacity type (set on Events) over the rooms assigned to it.
       </p>
       <table className="table">
         <thead><tr><th>Total</th><th>Rooms tagged</th><th>Capacity type</th></tr></thead>

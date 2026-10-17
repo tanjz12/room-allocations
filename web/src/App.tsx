@@ -12,7 +12,7 @@ import { driveAccount, finishSignIn, fmtSaved, signInDrive, loadDrive, pickPacka
 import Privacy from './views/Privacy';
 import { packageFile, packageText, readPackage } from './lib/package';
 
-const TABS = ['Schedule', 'Capacity by use', 'Floor plans', 'Events & tags', 'Rooms', 'Generate maps'] as const;
+const TABS = ['Schedule', 'Capacity by use', 'Floor plans', 'Events', 'Rooms', 'Maps & Room signs'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -192,9 +192,9 @@ export default function App() {
         {tab === 'Schedule' && <Schedule {...props} />}
         {tab === 'Capacity by use' && <CapacityView {...props} />}
         {tab === 'Floor plans' && <MapView {...props} />}
-        {tab === 'Events & tags' && <EventsView {...props} />}
+        {tab === 'Events' && <EventsView {...props} />}
         {tab === 'Rooms' && <RoomsView {...props} />}
-        {tab === 'Generate maps' && <ExportView {...props} />}
+        {tab === 'Maps & Room signs' && <ExportView {...props} />}
       </main>
       <footer className="site-foot">
         <span>Google sign-in is only used to open and save the Drive files and folders you choose.</span>

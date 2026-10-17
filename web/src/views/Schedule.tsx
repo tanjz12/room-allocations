@@ -59,7 +59,7 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
         <div className="grid" style={{ gridTemplateColumns: `70px ${'78px '.repeat((state.config.phaseSchedules ?? []).length)}repeat(${rooms.length}, 78px)` }}>
           <div className="corner">Time</div>
           {phaseCols(state.config.phaseSchedules).map(([label, key], i) => (
-            <div key={key} className="room-head phase-head" style={{ left: 70 + i * 78 }} title="Edit phases on Events & tags">
+            <div key={key} className="room-head phase-head" style={{ left: 70 + i * 78 }} title="Edit phases on Events">
               <b>{label}</b><small>schedule</small><small>phases</small>
             </div>
           ))}
