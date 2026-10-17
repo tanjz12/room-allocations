@@ -397,3 +397,7 @@ button.font-item.on { background: #e3f1ef; }
   .typst-files { flex: none; }
   .typst-code { min-height: 320px; }
 }
+.pv-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pv-pick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.pv-pick input { width: 130px; }
+.pv-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,.2); }

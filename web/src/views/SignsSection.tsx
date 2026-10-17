@@ -7,6 +7,7 @@ import type { ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import FontControl from './FontControl';
 import { usedColors } from '../lib/colors';
+import { roomTags } from '../lib/model';
 
 const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -25,7 +26,8 @@ export default function SignsSection({ state, update }: ViewProps) {
   const [tyOpen, setTyOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(true);
   const [output, setOutput] = useState<'basic' | 'typst'>('basic');
-  const [ty, setTy] = useState<{ pdf?: Uint8Array; pages: string[]; errors: string[]; code: string } | null>(null);
+  const [ty, setTy] = useState<{ pdf?: Uint8Array; pages: string[]; errors: string[]; code: string; preview?: boolean } | null>(null);
+  const [pv, setPv] = useState<Record<string, string> | null>(null);
   const [tyBusy, setTyBusy] = useState('');
   const [tyMsg, setTyMsg] = useState<{ err?: string; ok?: string }>({});
   const tyFileRef = useRef<HTMLInputElement>(null);
@@ -70,7 +72,19 @@ export default function SignsSection({ state, update }: ViewProps) {
   const fset = sf && numSf ? { text: sf, number: numSf } : null;
   const fonts = fset ? { text: fset.text.font, number: fset.number.font } : null;
   const typstOut = output === 'typst' && ty?.pdf ? ty.pdf : null;
-  const ready = (typstOut ? true : !!fset && signs.length > 0 && logoReady) && !busy;
+  // Preview: one sign per number-box color (usually one per tag), from a random room unless one is picked.
+  const groups: { color: string; tag: string; rooms: { id: string; opt: string }[] }[] = [];
+  for (const sg of signs) {
+    if (sg.copy !== 1) continue;
+    const r = state.rooms.find((x) => x.id === sg.roomId)!;
+    let g = groups.find((x) => x.color === sg.box);
+    if (!g) groups.push(g = { color: sg.box, tag: roomTags(state, r)[0]?.name ?? 'Untagged', rooms: [] });
+    g.rooms.push({ id: sg.roomId, opt: sg.label === r.name ? sg.label : `${sg.label} · ${r.name}` });
+  }
+  const randomPick = () => Object.fromEntries(groups.map((g) => [g.color, g.rooms[Math.floor(Math.random() * g.rooms.length)].id]));
+  const pvIds = (p: Record<string, string>) => groups.map((g) => (g.rooms.some((r) => r.id === p[g.color]) ? p[g.color] : g.rooms[0].id));
+  const inPreview = !!pv && (typstOut ? !!ty?.preview : output === 'basic');
+  const ready = (typstOut ? true : !!fset && signs.length > 0 && logoReady) && !busy && !inPreview;
 
   const pdf = () => typstOut
     ? Promise.resolve(new Blob([typstOut as BlobPart], { type: 'application/pdf' }))
@@ -90,24 +104,32 @@ export default function SignsSection({ state, update }: ViewProps) {
   ] : [];
   const tyData = tyOpen && fset && logoReady ? typstRooms(signs, cfg, fset, logo) : null;
   const roomsJson = tyData ? JSON.stringify(tyData.rooms, null, 1) : '';
+  const previewJson = (ids: string[]) => JSON.stringify(ids.map((id) => tyData!.rooms.find((r) => r.room === id && r.copy === 1)).filter(Boolean), null, 1);
   const code = tcfg.code ?? (tyData && fset ? defaultTypst(cfg, fset, tyData.footer, logoFile) : '');
   const extraFonts = (tcfg.files ?? []).filter((f) => /\.(ttf|otf)$/i.test(f.name));
-  const generateTypst = async () => {
+  const generateTypst = async (ids?: string[]) => {
     if (!tyData) return;
     setTyMsg({});
     setTyBusy('Loading Typst… (the first time downloads about 11 MB)');
     try {
       const { compileTypst } = await import('../lib/typstCompile');
       setTyBusy('Generating…');
-      const files = [{ path: 'rooms.json', data: new TextEncoder().encode(roomsJson) }];
+      const files = [{ path: 'rooms.json', data: new TextEncoder().encode(ids ? previewJson(ids) : roomsJson) }];
       if (logoFile) files.push({ path: logoFile, data: new Uint8Array(await (await fetch(cfg.logo!)).arrayBuffer()) });
       for (const f of tcfg.files ?? []) files.push({ path: f.name, data: bytes(f.data) });
       const fontKey = [...fontFiles, ...extraFonts.map((f) => ({ name: f.name, b64: f.data }))].map((f) => `${f.name}:${f.b64.length}`).join('|');
       const r = await compileTypst(code, files, [...fontFiles.map((f) => bytes(f.b64)), ...extraFonts.map((f) => bytes(f.data))], fontKey);
-      setTy({ ...r, code });
+      setTy({ ...r, code, preview: !!ids });
       if (r.pdf) setOutput('typst');
-    } catch (e) { setTy({ pages: [], errors: [errText(e)], code }); }
+    } catch (e) { setTy({ pages: [], errors: [errText(e)], code, preview: !!ids }); }
     setTyBusy('');
+  };
+  const previewBasic = () => { setPv(randomPick()); setOutput('basic'); };
+  const previewTypst = () => { const p = randomPick(); setPv(p); void generateTypst(pvIds(p)); };
+  const pickPreview = (color: string, id: string) => {
+    const p = { ...(pv ?? {}), [color]: id };
+    setPv(p);
+    if (typstOut && ty?.preview) void generateTypst(pvIds(p));
   };
   const rememberTy = (f: TypstDriveFile, extra: Partial<TypstConfig> = {}) =>
     setTyCfg({ ...extra, drive: f, driveFiles: [f, ...(tcfg.driveFiles ?? []).filter((x) => x.id !== f.id)] });
@@ -191,7 +213,7 @@ export default function SignsSection({ state, update }: ViewProps) {
     <section className="signs">
       <h2>Generate room signs</h2>
       <p className="muted">One letter-size sign per room in use, listing its events in time order (each once, by the event's sign name; events marked “hide on signs” on Events are left off). Rooms with nothing scheduled get no sign.</p>
-      <button className="group-toggle sign-ed-toggle" aria-expanded={edOpen} title={edOpen ? 'Collapse' : 'Expand'} onClick={() => { setEdOpen(!edOpen); if (!edOpen) setTyOpen(false); }}>{edOpen ? '▾' : '▸'} <b>Room sign editor</b></button>
+      <button className="group-toggle sign-ed-toggle" aria-expanded={edOpen} title={edOpen ? 'Collapse' : 'Expand'} onClick={() => { setEdOpen(!edOpen); if (!edOpen) setTyOpen(false); }}>{edOpen ? '▾' : '▸'} <b>Basic editor</b></button>
       {edOpen && <div className="sign-settings">
         <div className="sign-logo">
           {logo ? <img src={logo.src} alt="Sign logo" /> : <span className="muted">No logo</span>}
@@ -228,13 +250,14 @@ export default function SignsSection({ state, update }: ViewProps) {
             <label title="Distance from the top of the sign to the top of the logo">Height <input type="number" className="numin short" step={0.05} min={0} max={SIGN_H / 72} disabled={cfg.logoY == null} value={cfg.logoY == null ? '' : inch(cfg.logoY)} placeholder={cfg.logoY == null ? 'auto' : ''} onChange={(e) => setPt('logoY', e.target.value, 0, SIGN_H)} /></label>
           </div>}
           <label className="wide">Footer <textarea rows={2} value={cfg.footer ?? ''} placeholder="e.g. where to find live updates or the information desk" onChange={(e) => setCfg({ footer: e.target.value })} /></label>
-          <div className="wide"><button className="primary" disabled={!fset || !logoReady} title="Show signs from the basic editor; Download PDF and Save PDF to Drive then use them" onClick={() => setOutput('basic')}>Generate</button></div>
+          <div className="wide"><button className="primary" disabled={!fset || !logoReady} title="Show signs from the basic editor; Download PDF and Save PDF to Drive then use them" onClick={() => { setPv(null); setOutput('basic'); }}>Generate</button> <button disabled={!fset || !logoReady || !groups.length} title="One page per number box color, from a random room each" onClick={previewBasic}>Generate preview</button></div>
         </div>
       </div>}
       <button className="group-toggle sign-ed-toggle" aria-expanded={tyOpen} title={tyOpen ? 'Collapse' : 'Expand'} onClick={() => { setTyOpen(!tyOpen); if (!tyOpen) setEdOpen(false); }}>{tyOpen ? '▾' : '▸'} <b>Typst editor</b>{tcfg.code != null && <span className="muted"> · edited</span>}</button>
       {tyOpen && <div className="typst-ed">
         <div className="toolbar">
-          <button className="primary" disabled={!tyData || !!tyBusy} title="Compile this code; Download PDF and Save PDF to Drive then use the result" onClick={() => void generateTypst()}>Generate</button>
+          <button className="primary" disabled={!tyData || !!tyBusy} title="Compile this code; Download PDF and Save PDF to Drive then use the result" onClick={() => { setPv(null); void generateTypst(); }}>Generate</button>
+          <button disabled={!tyData || !!tyBusy || !groups.length} title="One page per number box color, from a random room each" onClick={previewTypst}>Generate preview</button>
           <label>Typst file name <input value={tcfg.fileName ?? ''} placeholder={`${name}.typ`} onChange={(e) => setTyCfg({ fileName: e.target.value || undefined })} /></label>
           <button disabled={!code || !!tyBusy} title={tcfg.drive ? `Updates “${tcfg.drive.name}” on Drive` : 'No Typst file yet: pick a Drive folder to save a new one'} onClick={() => void saveTy()}>Save to Drive</button>
           <button disabled={!code || !!tyBusy} title="Pick a Drive folder and save the code as a new .typ file" onClick={() => void saveTyNew()}>Save as new file…</button>
@@ -278,12 +301,12 @@ export default function SignsSection({ state, update }: ViewProps) {
         <button className="primary" disabled={!ready} onClick={() => void downloadPdf()}>Download PDF</button>
         <button disabled={!ready} onClick={() => void toDrive()} title="Pick a Drive folder; saves the PDF there, replacing a file with the same name">Save PDF to Drive…</button>
         {cfg.driveFolder && <span className="muted" title="The folder picker opens here; the package remembers the last folder used">last saved to “{cfg.driveFolder.name}”</span>}
-        <span className="muted">{busy || (typstOut ? `${ty?.pages.length ?? 0} pages from the Typst editor${ty?.code !== code ? ' (code changed since Generate)' : ''}` : `${signs.length} sign${signs.length === 1 ? '' : 's'} from the basic editor`)}</span>
+        <span className="muted">{busy || (inPreview ? '' : typstOut ? `${ty?.pages.length ?? 0} pages from the Typst editor${ty?.code !== code ? ' (code changed since Generate)' : ''}` : `${signs.length} sign${signs.length === 1 ? '' : 's'} from the basic editor`)}</span>
         {msg.err && <span className="warn">{msg.err}</span>}
         {msg.pdf && <span>Saved: <a href={msg.pdf} target="_blank" rel="noreferrer">PDF</a></span>}
       </div>
       <details className="sign-rooms">
-        <summary>Room sign details ({rooms.length} rooms in use)</summary>
+        <summary>Room sign preview ({rooms.length} rooms in use)</summary>
         <p className="muted">Blank fields use the room's building and name. The note adds lines under the events (one per line). Copies print “1 of 2”, “2 of 2”, … for rooms with several doors.</p>
         <table className="table">
           <thead><tr><th>Room</th><th>Sign</th><th>Building</th><th>Floor</th><th>Room label</th><th>Copies</th><th>Note</th><th>Events on sign</th></tr></thead>
@@ -307,7 +330,27 @@ export default function SignsSection({ state, update }: ViewProps) {
           </tbody>
         </table>
       </details>
-      {typstOut && ty ? (
+      {inPreview && pv && (typstOut || fonts) ? (
+        <div className="sign-grid">
+          {groups.map((g, i) => {
+            const id = pvIds(pv)[i], sg = signs.find((x) => x.roomId === id && x.copy === 1);
+            const page = typstOut ? ty?.pages[i] : sg && fonts ? signSvg(sg, cfg, fonts, logo) : '';
+            return (
+              <div key={g.color} className="pv-card">
+                <div className="pv-pick">
+                  <span className="pv-swatch" style={{ background: g.color }} /> <b>{g.tag}</b>
+                  <input key={id} list={`pv-${i}`} defaultValue={g.rooms.find((r) => r.id === id)?.opt} placeholder="Type a room" title="Type to search this color's rooms"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => { const r = g.rooms.find((x) => x.opt === e.target.value); if (r && r.id !== id) pickPreview(g.color, r.id); }} />
+                  <datalist id={`pv-${i}`}>{g.rooms.map((r) => <option key={r.id} value={r.opt} />)}</datalist>
+                  <span className="muted">{g.rooms.length} rooms</span>
+                </div>
+                {page ? <figure className={typstOut ? 'sign-thumb typst-page' : 'sign-thumb'} dangerouslySetInnerHTML={{ __html: page }} /> : <span className="muted">{tyBusy || 'No page'}</span>}
+              </div>
+            );
+          })}
+        </div>
+      ) : typstOut && ty ? (
         <div className="sign-grid">
           {ty.pages.map((p, i) => <figure key={i} className="sign-thumb typst-page" dangerouslySetInnerHTML={{ __html: p }} />)}
         </div>
