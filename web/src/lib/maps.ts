@@ -33,8 +33,8 @@ export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy,
   if (variant === 'external' && !tags.some((c) => c.external)) return null;
   if (variant === 'internal' && tags.length && !tags.some((c) => c.internal)) return null;
   const tag = tags[0];
-  const gc = s.config.mapGroupColor;
-  if (colorBy === 'event' && !only && gc?.group && e.group === gc.group) return { key: GROUP_KEY, label: gc.group, color: gc.color };
+  const gc = colorBy === 'event' && !only ? s.config.mapGroupColors?.find((g) => g.group && g.group === e.group) : undefined;
+  if (gc) return { key: GROUP_KEY + gc.group, label: gc.group, color: gc.color };
   const entry = colorBy === 'category'
     ? (tag ? { key: tag.id, label: tag.name, color: tag.color } : { key: 'none', label: 'Untagged', color: '#999999' })
     : { key: e.id, label: e.name, color: e.color };

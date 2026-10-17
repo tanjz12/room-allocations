@@ -23,7 +23,7 @@ export type Proctors = {
 export type Spacing = { eventIds: string[]; minutes: number; label: string };
 export type Config = {
   title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
-  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing; mapGroupColor?: { group: string; color: string };
+  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; spacing?: Spacing; mapGroupColors?: { group: string; color: string }[];
   maps: MapDef[]; notes?: Record<string, string>;
   drive?: DriveConfig; sheetTypeFill?: Record<string, string>;
   /** Phase timelines this data uses (none on a blank site), e.g. BMT's External and Internal schedules. */

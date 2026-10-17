@@ -22,11 +22,14 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
   const [showSel, setShow] = useState<'app' | 'focus'>('focus');
   const show = !hl ? 'app' : showSel;
   const variant: Variant = 'app';
-  const gc = state.config.mapGroupColor;
+  const gcs = state.config.mapGroupColors ?? [];
   const groups = [...new Set([...eventGroups(state), ...state.events.map((e) => e.group)])].filter((g) => g && state.events.some((e) => e.group === g));
-  const setGroup = (g: string) => update((d) => {
-    if (!g) { delete d.config.mapGroupColor; return; }
-    d.config.mapGroupColor = { group: g, color: d.config.mapGroupColor?.color ?? d.events.find((e) => e.group === g)?.color ?? '#4a7fc1' };
+  const addGroup = (g: string) => update((d) => {
+    d.config.mapGroupColors = [...(d.config.mapGroupColors ?? []), { group: g, color: d.events.find((e) => e.group === g)?.color ?? '#4a7fc1' }];
+  });
+  const removeGroup = (g: string) => update((d) => {
+    d.config.mapGroupColors = (d.config.mapGroupColors ?? []).filter((x) => x.group !== g);
+    if (!d.config.mapGroupColors.length) delete d.config.mapGroupColors;
   });
   const only = show === 'focus' && hl ? (e: EventT) => hl.eventIds.includes(e.id) : undefined;
   const [hover, setHover] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -47,7 +50,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
   const rendered = state.config.maps.map((m) => ({ b: m.name, svg: renderMap(m, state, time, colorBy, variant, font, only, state.mapColors.unknown, state.mapColors.other, only ? state.mapColors.focusUnused : undefined).svg }));
   const sEntries = standalone.map((r) => ({ r, e: roomEntry(state, r.id, time, colorBy, variant, only) }));
   const setColor = (key: string, color: string) => update((d) => {
-    if (key === GROUP_KEY) { if (d.config.mapGroupColor) d.config.mapGroupColor.color = color; return; }
+    if (key.startsWith(GROUP_KEY)) { const g = d.config.mapGroupColors?.find((x) => GROUP_KEY + x.group === key); if (g) g.color = color; return; }
     const x = colorBy === 'category' ? d.categories.find((c) => c.id === key) : d.events.find((e) => e.id === key);
     if (x) x.color = color;
   });
@@ -144,8 +147,15 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
         <button onClick={() => setUploading(true)} disabled={uploading}>Upload floor plan</button>
         <b>Time:</b> <TimePicker time={time} setTime={setTime} />
         <label>Color by <select value={colorBy} onChange={(e) => setColorBy(e.target.value as ColorBy)}><option value="event">event</option><option value="category">tag</option></select></label>
-        {colorBy === 'event' && groups.length > 0 && <label title="Every room with an event in this group gets one color">Same color for <select value={gc?.group ?? ''} onChange={(e) => setGroup(e.target.value)}>
-          <option value="">no group</option>{groups.map((g) => <option key={g} value={g}>all {g} rooms</option>)}</select></label>}
+        {colorBy === 'event' && groups.length > 0 && <span className="tags-cell" title="Every room with an event in one of these groups gets that group's color">Same color for{' '}
+          {gcs.map((g) => <span key={g.group} className="chip tag-chip">{g.group}
+            <button className="chip-x" title={`Remove ${g.group}`} onClick={() => removeGroup(g.group)}>×</button></span>)}
+          {groups.some((g) => !gcs.some((x) => x.group === g)) && (
+            <select className="tag-add" title="Add event group" value="" onChange={(e) => e.target.value && addGroup(e.target.value)}>
+              <option value="" hidden>+</option>
+              {groups.filter((g) => !gcs.some((x) => x.group === g)).map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          )}</span>}
         {hl && <label>Show <select value={show} onChange={(e) => setShow(e.target.value as 'app' | 'focus')}>
           <option value="app">all events</option><option value="focus">{hl.label}</option></select></label>}
         <button onClick={() => window.print()}>Print</button>

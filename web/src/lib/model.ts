@@ -92,6 +92,8 @@ export function normalize(s: Partial<State>): State {
   const out: State = { ...d, ...s, config: { ...emptyConfig(), ...(s.config ?? {}) }, mapColors: { ...DEFAULT_MAP_COLORS, ...(s.mapColors ?? {}) } } as State;
   for (const k of ['rooms', 'events', 'categories', 'blocks', 'capTypes', 'phases', 'summaryTotals'] as const) if (!Array.isArray(out[k])) (out as Record<string, unknown>)[k] = [];
   out.typeTags ??= {};
+  const oldGc = (out.config as { mapGroupColor?: { group: string; color: string } }).mapGroupColor;
+  if (oldGc) { if (!out.config.mapGroupColors?.length && oldGc.group) out.config.mapGroupColors = [oldGc]; delete (out.config as { mapGroupColor?: unknown }).mapGroupColor; }
   for (const c of out.categories) delete (c as Category & { hideOn?: unknown }).hideOn;
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
   if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));
