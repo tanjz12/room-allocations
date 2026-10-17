@@ -157,8 +157,7 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
       {P && <table className="table proctor-settings"><tbody>
         <tr><th>Proctors per room</th><td>min {capSelect(P.minCap, (v) => setP((p) => { p.minCap = v; }))}
           {' '}ideal {capSelect(P.idealCap, (v) => setP((p) => { p.idealCap = v; }))}</td></tr>
-        <tr><th>Rooms listed one by one</th><td><RoomChips state={state} value={P.listed} onChange={(v) => setP((p) => { p.listed = v; })} />
-          <div className="muted small">Rooms matching any of these each get their own editable proctor count.</div></td></tr>
+        <tr><th>Rooms listed one by one</th><td><RoomChips state={state} value={P.listed} onChange={(v) => setP((p) => { p.listed = v; })} /></td></tr>
         <tr><th>Pills</th><td>
           {P.pills.map((pill, pi) => (
             pill.id !== openPill ? (
@@ -199,7 +198,7 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
             </div>
           )))}
           <button onClick={() => { const np = newPill(`Proctors ${P.pills.length + 1}`, P.pills.at(-1)?.group ?? groups[0] ?? ''); setP((p) => { p.pills.push(np); }); setOpenId(np.id); }}>+ Add pill</button>
-          <p className="muted small">Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</p>
+          <details className="muted small pill-help"><summary>How pills count</summary>Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</details>
         </td></tr>
         <tr><th>Note</th><td><textarea rows={2} value={P.note ?? ''} onChange={(e) => setP((p) => { if (e.target.value) p.note = e.target.value; else delete p.note; })} /></td></tr>
       </tbody></table>}

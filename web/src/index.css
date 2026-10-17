@@ -305,3 +305,4 @@ h1.title { cursor: text; }
 .suggest-list > span { padding: 3px 6px; }
 .pill-edit button.pill-toggle { border: none; background: none; padding: 0 2px; color: #555; font-size: 14px; cursor: pointer; }
 .pill-edit button.pill-toggle:hover { color: var(--bmt-teal-dark); }
+.pill-help { margin-top: 6px; } .pill-help > summary { cursor: pointer; }
