@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { exportName, type NoteStyle, type RoomSign, type SignConfig } from '../lib/config';
-import { DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, loadSignFont, logoBox, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
+import { DEFAULT_BOX_GAP, DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, loadSignFont, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, signsPptx, type Logo, type SignFont } from '../lib/signs';
 import { pickFolder, saveSigns } from '../lib/drive';
 import type { ViewProps } from './common';
 import ColorPicker from './ColorPicker';
@@ -21,6 +21,7 @@ export default function SignsSection({ state, update }: ViewProps) {
   const [msg, setMsg] = useState<{ err?: string; slides?: string; pdf?: string }>({});
   const [nf, setNf] = useState<SignFont | null>(null);
   const [numOpen, setNumOpen] = useState(false);
+  const [edOpen, setEdOpen] = useState(false);
   const [noteEd, setNoteEd] = useState<{ roomId: string; note: string; style: NoteStyle } | null>(null);
   const numName = cfg.numberFont?.name, numData = cfg.numberFont?.data, customText = !!cfg.font;
   useEffect(() => {
@@ -49,10 +50,10 @@ export default function SignsSection({ state, update }: ViewProps) {
   const setCfg = (p: Partial<SignConfig>) => update((d) => { d.config.signs = { ...(d.config.signs ?? {}), ...p }; });
   const setRoom = (id: string, p: Partial<RoomSign>) => update((d) => { const r = d.rooms.find((x) => x.id === id)!; r.sign = { ...(r.sign ?? {}), ...p }; });
   const logoReady = !cfg.logo || !!logo;
-  const lb = logoBox(cfg);
   const inch = (pt: number) => Math.round((pt / 72) * 100) / 100;
-  const setPt = (k: 'logoSize' | 'logoX' | 'logoY', v: string, min: number, max: number) => {
-    if (v === '' || !Number.isFinite(+v)) return;
+  const setPt = (k: 'logoSize' | 'logoX' | 'logoY' | 'boxGap', v: string, min: number, max: number) => {
+    if (v === '') return setCfg({ [k]: undefined });
+    if (!Number.isFinite(+v)) return;
     setCfg({ [k]: Math.min(max, Math.max(min, +v * 72)) });
   };
   const numSf = cfg.numberFont || !cfg.font ? nf : sf;
@@ -97,7 +98,8 @@ export default function SignsSection({ state, update }: ViewProps) {
     <section className="signs">
       <h2>Generate room signs</h2>
       <p className="muted">One letter-size sign per room in use, listing its events in time order (each once, by the event's sign name; events marked “hide on signs” on Events are left off). Rooms with nothing scheduled get no sign.</p>
-      <div className="sign-settings">
+      <button className="group-toggle sign-ed-toggle" aria-expanded={edOpen} title={edOpen ? 'Collapse' : 'Expand'} onClick={() => setEdOpen(!edOpen)}>{edOpen ? '▾' : '▸'} <b>Room sign editor</b></button>
+      {edOpen && <div className="sign-settings">
         <div className="sign-logo">
           {logo ? <img src={logo.src} alt="Sign logo" /> : <span className="muted">No logo</span>}
           <div>
@@ -109,7 +111,12 @@ export default function SignsSection({ state, update }: ViewProps) {
         <div className="sign-fields">
           <label>Heading <input value={cfg.heading ?? DEFAULT_HEADING} onChange={(e) => setCfg({ heading: e.target.value })} /></label>
           <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <ColorPicker value={(cfg.color || DEFAULT_SIGN_COLOR)} existing={usedColors(state)} onChange={(e) => setCfg({ color: e })} /></label>
-          <label>File name <input value={cfg.fileName ?? defaultName} placeholder={defaultName} onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
+          <div className="logo-place">
+            <label title="Fixed: long room numbers shrink to fit the box. Stretch: the box widens to the left so the room number keeps its size.">Room number box <select value={cfg.boxStretch ? 'stretch' : 'fixed'} onChange={(e) => setCfg({ boxStretch: e.target.value === 'stretch' || undefined })}>
+              <option value="fixed">Fixed size</option><option value="stretch">Stretch to fit room number</option>
+            </select></label>
+            {cfg.boxStretch && <label title="The box stops widening at this distance from the building name; past that, the room number shrinks to fit">Min gap (in) <input type="number" className="numin short" step={0.05} min={0} max={4} value={inch(cfg.boxGap ?? DEFAULT_BOX_GAP)} onChange={(e) => setPt('boxGap', e.target.value, 0, 288)} /></label>}
+          </div>
           <div className="wide logo-place">
             <b>Font</b>
             <FontControl value={cfg.font} kind="text" defaultLabel="IBM Plex Sans" onChange={(f) => { setCfg({ font: f }); setMsg({}); }} onError={fontErr} />
@@ -122,17 +129,16 @@ export default function SignsSection({ state, update }: ViewProps) {
           </div>
           {cfg.logo && <div className="wide logo-place">
             <b>Logo (inches)</b>
-            <label>Size <input type="number" className="numin" step={0.05} min={0.25} max={8} value={inch(lb.size)} onChange={(e) => setPt('logoSize', e.target.value, 18, SIGN_W)} /></label>
-            <label>Center from left <input type="number" className="numin" step={0.05} min={0} max={SIGN_W / 72} value={inch(lb.x)} onChange={(e) => setPt('logoX', e.target.value, 0, SIGN_W)} /></label>
-            <label title="Auto centers the logo between the last event and the footer, like the BmMT 2026 signs"><input type="checkbox" checked={lb.y == null} onChange={(e) => setCfg({ logoY: e.target.checked ? undefined : 486 })} /> Auto height</label>
-            {lb.y != null && <label>Top from top <input type="number" className="numin" step={0.05} min={0} max={SIGN_H / 72} value={inch(lb.y)} onChange={(e) => setPt('logoY', e.target.value, 0, SIGN_H)} /></label>}
-            <button disabled={cfg.logoSize == null && cfg.logoX == null && cfg.logoY == null} onClick={() => setCfg({ logoSize: undefined, logoX: undefined, logoY: undefined })}>Reset to default</button>
-            <span className="muted">default: {inch(DEFAULT_LOGO.size)} in square, centered, auto height</span>
+            <label>Size <input type="number" className="numin short" step={0.05} min={0.25} max={8} value={cfg.logoSize == null ? '' : inch(cfg.logoSize)} placeholder={String(inch(DEFAULT_LOGO.size))} onChange={(e) => setPt('logoSize', e.target.value, 18, SIGN_W)} /></label>
+            <label>Center from left <input type="number" className="numin short" step={0.05} min={0} max={SIGN_W / 72} value={cfg.logoX == null ? '' : inch(cfg.logoX)} placeholder={String(inch(DEFAULT_LOGO.x))} onChange={(e) => setPt('logoX', e.target.value, 0, SIGN_W)} /></label>
+            <label title="Auto centers the logo between the last event and the footer, like the BmMT 2026 signs"><input type="checkbox" checked={cfg.logoY == null} onChange={(e) => setCfg({ logoY: e.target.checked ? undefined : 486 })} /> Auto height</label>
+            <label title="Distance from the top of the sign to the top of the logo">Height <input type="number" className="numin short" step={0.05} min={0} max={SIGN_H / 72} disabled={cfg.logoY == null} value={cfg.logoY == null ? '' : inch(cfg.logoY)} placeholder={cfg.logoY == null ? 'auto' : ''} onChange={(e) => setPt('logoY', e.target.value, 0, SIGN_H)} /></label>
           </div>}
           <label className="wide">Footer <textarea rows={2} value={cfg.footer ?? ''} placeholder="e.g. where to find live updates or the information desk" onChange={(e) => setCfg({ footer: e.target.value })} /></label>
         </div>
-      </div>
+      </div>}
       <div className="toolbar">
+        <label>File name <input value={cfg.fileName ?? defaultName} placeholder={defaultName} onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
         <button className="primary" disabled={!ready} onClick={() => void downloadPdf()}>Download PDF</button>
         <button disabled={!ready} onClick={() => void toDrive()} title="Pick a Drive folder; saves a Google Slides version and a PDF there, replacing files with the same name">Save Slides + PDF to Drive…</button>
         {cfg.driveFolder && <span className="muted" title="The folder picker opens here; the package remembers the last folder used">last saved to “{cfg.driveFolder.name}”</span>}

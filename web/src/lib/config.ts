@@ -40,7 +40,7 @@ export type Config = {
 };
 /** Room signs: `logo` is a PNG/JPEG data URL; `color` fills the room-number box. */
 /** Logo box in points: `logoSize` square, `logoX` its center from the left, `logoY` its top. */
-export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; font?: SignFontFile; numberFont?: SignFontFile };
+export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; boxStretch?: boolean; boxGap?: number; font?: SignFontFile; numberFont?: SignFontFile };
 /** Styling for a room's sign note. `font` picks the event font or the room-number font; bold and italic are drawn by the app (no extra font files). */
 export type NoteStyle = { size?: number; font?: 'text' | 'number'; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean };
 /** An uploaded TrueType font: `name` is its family name (also used in Google Slides), `data` the .ttf as base64. */

@@ -12,6 +12,8 @@ export const SIGN_W = 612;
 export const SIGN_H = 792;
 export const DEFAULT_SIGN_COLOR = '#2735e4';
 export const DEFAULT_HEADING = 'events';
+/** Stretched room number box: default minimum gap (pt) between the building name and the box, about the gap next to “Dwinelle” on a fixed box. */
+export const DEFAULT_BOX_GAP = 86.4;
 const M = 36;
 /** Matches the BmMT 2026 signs: a 2 in square, centered across, and (with no `logoY`) midway between the last event and the footer. */
 export const DEFAULT_LOGO = { size: 144, x: SIGN_W / 2 };
@@ -153,12 +155,21 @@ export function layoutSign(sg: Sign, cfg: SignConfig, fonts: SignFonts, logo?: L
   const text = (t: string, x: number, y: number, size: number, box: number, anchor: 'start' | 'middle' = 'start', color = '#000000', fk: 'text' | 'number' = 'text', style?: NoteStyle) =>
     items.push({ kind: 'text', text: t, x, y, size: fit(fonts[fk], t, size, box), color, anchor, box, font: fk, style });
   if (sg.copies > 1) text(`${sg.copy} of ${sg.copies}`, M, 28, 12, 200, 'start', '#888888');
-  const bx = 316.8, by = 36, bw = SIGN_W - M - bx, bh = 129.6;
+  const want = [...sg.label].length <= 3 ? 110 : 95;
+  const fixedW = SIGN_W - M - 316.8;
+  let bw = fixedW;
+  // Stretch: the box grows to the left so the room number keeps its full size, but stops at the minimum gap from the building name.
+  if (cfg.boxStretch) {
+    const nameW = Math.max(adv(font, sg.building, 50), sg.floor ? adv(font, sg.floor, 25) : 0);
+    const maxW = Math.max(fixedW, SIGN_W - 2 * M - nameW - (cfg.boxGap ?? DEFAULT_BOX_GAP));
+    bw = Math.min(maxW, Math.max(fixedW, adv(fonts.number, sg.label, want) + 24));
+  }
+  const bx = SIGN_W - M - bw, by = 36, bh = 129.6;
   text(sg.building, M, 86, 50, bx - M - 10);
   if (sg.floor) text(sg.floor, M, 116, 25, bx - M - 10);
   items.push({ kind: 'rect', x: bx, y: by, w: bw, h: bh, color: sg.box });
   // BmMT 2026: 110 pt for up to 3 characters, 95 pt for longer labels, then shrunk to fit the box.
-  const ls = Math.floor(fit(fonts.number, sg.label, [...sg.label].length <= 3 ? 110 : 95, bw - 24));
+  const ls = Math.floor(fit(fonts.number, sg.label, want, bw - 24));
   items.push({ kind: 'text', text: sg.label, x: bx + bw / 2, y: by + bh / 2 + ls * 0.348, size: ls, color: ink(sg.box), anchor: 'middle', box: bw - 24, font: 'number' });
   const heading = cfg.heading ?? DEFAULT_HEADING;
   if (heading) text(heading, SIGN_W / 2, 210.6, 35, SIGN_W - 2 * M, 'middle');

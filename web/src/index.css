@@ -36,6 +36,9 @@ h2 { font-size: 15px; margin: 16px 0 8px; }
 .table tr.hl { background: #fff6d6; }
 .num { text-align: right !important; font-variant-numeric: tabular-nums; }
 .numin { width: 64px; }
+.numin.short { width: 44px; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .mono { font-family: ui-monospace, Consolas, monospace; width: 220px; }
 .ovr { background: #ffe8b3; }
 .proc-in { width: 3.2em; padding: 0 2px; font-size: 11px; text-align: right; }
@@ -226,7 +229,8 @@ tr.inactive td, tr.inactive td b { color: #999; }
 .center { text-align: center; }
 .signs { margin-top: 28px; border-top: 1px solid #ddd; padding-top: 8px; }
 .sign-settings { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin: 8px 0; }
-.sign-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 150px; }
+.sign-logo { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sign-logo > div { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .sign-logo img { width: 96px; height: 96px; object-fit: contain; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
 .sign-logo > span { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; border: 1px dashed #bbb; border-radius: 4px; }
 .sign-fields { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 16px; align-items: center; }
@@ -312,6 +316,7 @@ h1.title { cursor: text; }
 .same-colors { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 button.group-toggle { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 button.group-toggle:hover { color: var(--bmt-teal-dark); }
+button.sign-ed-toggle { display: block; margin: 6px 0 10px; }
 @media (max-width: 600px) {
   .floor-plans .toolbar > label { order: 2; }
   .floor-plans .toolbar-actions { order: 1; width: 100%; margin-left: 0; }
@@ -364,4 +369,8 @@ button.font-item.on { background: #e3f1ef; }
   .font-list { max-height: 45vh; }
   .font-search, .font-weight select { font-size: 16px; }
   button.font-item { padding: 8px 6px; font-size: 17px; }
+}
+@media (max-width: 600px) {
+  .sign-settings > .sign-fields { grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .sign-fields textarea { width: 100%; max-width: none; }
 }

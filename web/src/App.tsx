@@ -125,10 +125,10 @@ export default function App() {
   const linked = !!account && !!state.config.drive?.fileId;
   const openButton = (inMenu: boolean) => !account && !inMenu
     ? <>
+        <a className="gsi-privacy" href="#privacy">Privacy</a>
         <button className="hdr-btn signin" disabled={!!drive.busy} title="Sign in with Google; then click Open from Drive… to pick a data package" onClick={() => { setLoadErr(''); void openFromDrive(); }}>
           <span className="long">Sign in with Google</span><span className="short">Google Drive<span className="xs-hide"> Sign in</span></span>
         </button>
-        <a className="gsi-privacy" href="#privacy">Privacy</a>
       </>
     : meta.dirty
     ? <ConfirmButton label="Open from Drive…" word="load" className={inMenu ? '' : 'primary'} onConfirm={() => { setLoadErr(''); void openFromDrive(); }} />
