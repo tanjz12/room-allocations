@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { emptyConfig, mergeLegendExtras, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
+import { DEFAULT_ROOM_STATUSES, emptyConfig, mergeLegendExtras, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
 
 /** Only rooms with status Yes are scheduled or counted. `typeAuto`: the type comes from the room type rules instead of being set by hand. */
 export type Room = { id: string; name: string; building: string; type: string; typeAuto?: boolean; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
-export const ROOM_STATUSES = ['Yes', 'Need to Request', 'Awaiting Approval', 'No'];
+export const roomStatuses = (s: State) => s.config.roomStatuses ?? DEFAULT_ROOM_STATUSES;
 export const roomActive = (r: Room) => r.status === 'Yes';
 export type EventT = { id: string; name: string; color: string; start: number; end: number; startRef: TimeRef | null; endRef: TimeRef | null; capacityType: string; group: string; signName?: string; signHide?: boolean; signFirst?: boolean };
 /** Links an event time to the start or end of a phase's external schedule. */
@@ -113,6 +113,8 @@ export function normalize(s: Partial<State>): State {
   delete cfg.mapGroupColor; delete cfg.mapGroupColors;
   delete (cfg as Config & { spacing?: unknown }).spacing;
   mergeLegendExtras(cfg);
+  const sts = (cfg.roomStatuses ??= structuredClone(DEFAULT_ROOM_STATUSES));
+  for (const r of out.rooms) if (r.status && !sts.some((x) => x.name === r.status)) sts.push({ name: r.status, color: '#9e9e9e' });
   for (const c of out.categories) delete (c as Category & { hideOn?: unknown }).hideOn;
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
   if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));

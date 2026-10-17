@@ -25,6 +25,12 @@ export type Proctors = {
 export type SameColor = { id: string; name: string; color: string; groups: string[]; eventIds: string[] };
 /** A saved set of same-color groupings, offered in the floor plans' Show menu. */
 export type ColorOption = { id: string; name: string; colors: SameColor[] };
+/** A room status option; `color` matches its dropdown chip in the source Google Sheet. Only rooms set to Yes are scheduled or counted. */
+export type RoomStatus = { name: string; color: string };
+export const DEFAULT_ROOM_STATUSES: RoomStatus[] = [
+  { name: 'Yes', color: '#11734b' }, { name: 'Need to Request', color: '#0a53a8' }, { name: 'Awaiting Approval', color: '#5a3286' }, { name: 'No', color: '#b10202' }
+];
+
 export type Config = {
   title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
   subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; sameColors?: SameColor[]; colorOptions?: ColorOption[];
@@ -33,6 +39,7 @@ export type Config = {
   /** Room type rules: a room following the rules gets the first type (in `roomTypes` order) whose condition on [Raw] is true. */
   typeRules?: Record<string, string>;
   legendExtras?: LegendExtra[];
+  roomStatuses?: RoomStatus[];
   /** Phase timelines this data uses (none on a blank site), e.g. BMT's External and Internal schedules. */
   phaseSchedules?: PhaseSchedule[];
   /** Key of the phase schedule whose times events linked to a phase follow. */

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, ruleType, uid, type Category, type Room, type State, type Updater } from '../lib/model';
+import { roomStatuses, textColor, roomTypes, roomActive, roomCapacity, ruleType, uid, type Category, type Room, type State, type Updater } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
@@ -21,6 +21,17 @@ function CommitInput({ value, onCommit, ...rest }: { value: string; onCommit: (v
   const done = () => { if (draft !== null && draft !== value) onCommit(draft.trim()); setDraft(null); };
   return <input {...rest} value={draft ?? value} onChange={(e) => setDraft(e.target.value)} onBlur={done}
     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setDraft(null); }} />;
+}
+
+/** Status dropdown colored like its chip in the source Google Sheet. */
+function StatusSelect({ statuses, value, onChange }: { statuses: { name: string; color: string }[]; value: string; onChange: (v: string) => void }) {
+  const style = (c?: string) => (c ? { background: c, color: textColor(c) } : { background: '#fff', color: '#222' });
+  return (
+    <select className="status-sel" style={style(statuses.find((x) => x.name === value)?.color)} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="" style={style()}>—</option>
+      {statuses.map((x) => <option key={x.name} value={x.name} style={style(x.color)}>{x.name}</option>)}
+    </select>
+  );
 }
 
 /** A room's type: pick or type a new one; with type rules, clear it to follow the rules. */
@@ -54,6 +65,16 @@ export default function RoomsView({ state, update }: ViewProps) {
   const rules = Object.values(state.config.typeRules ?? {}).some((x) => x.trim());
   const [newType, setNewType] = useState('');
   const [typeMsg, setTypeMsg] = useState('');
+  const [ctl, setCtl] = useState<'types' | 'tags' | 'status' | null>(null);
+  const [newStatus, setNewStatus] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
+  const statuses = roomStatuses(state);
+  const addStatus = () => {
+    const v = newStatus.trim();
+    if (!v || statuses.some((z) => z.name === v)) return setStatusMsg(v ? `${v} already exists.` : 'A status needs a name.');
+    setStatusMsg(''); setNewStatus('');
+    update((d) => { (d.config.roomStatuses ??= structuredClone(statuses)).push({ name: v, color: defaultColor(d) }); });
+  };
   const addType = () => {
     const t = newType.trim();
     if (!t || types.includes(t)) return setTypeMsg('Pick a new type name.');
@@ -121,7 +142,12 @@ export default function RoomsView({ state, update }: ViewProps) {
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
 
-      <h2>Room types</h2>
+      <div className="ctl-toggles">
+        {([['types', 'Room types'], ['tags', 'Tags'], ['status', 'Room statuses']] as const).map(([k, label]) => (
+          <button key={k} className="group-toggle" aria-expanded={ctl === k} onClick={() => setCtl(ctl === k ? null : k)}>{ctl === k ? '▾' : '▸'} <b>{label}</b></button>
+        ))}
+      </div>
+      {ctl === 'types' && (<>
       <p className="muted">
         A room's type picks its capacity formulas and tags. A rule sets the type from the room's <code>[Raw]</code>, e.g. <code>[Raw] &gt;= 150</code> or <code>[Raw] &gt;= 40 and [Raw] &lt; 150</code>;
         rules are checked top to bottom and the first true one wins. Clear a room's type below to use the rules; a type picked or typed there overrides them.
@@ -155,9 +181,10 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newType} placeholder="New room type" onChange={(e) => setNewType(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addType()} /> <button onClick={addType}>+ Add room type</button>{typeMsg && <span className="warn"> {typeMsg}</span>}</p>
+      </>)}
       <datalist id="room-types">{types.map((t) => <option key={t} value={t} />)}</datalist>
 
-      <h2>Tags</h2>
+      {ctl === 'tags' && (<>
       <p className="muted">Tags are for coloring maps. You can choose whether a color shows on the internal map or the external map. The tag of a room is determined by its events. Only rooms with status Yes are colored on the map.</p>
       <table className="table">
         <thead><tr><th>Color</th><th>Name</th><th>Internal map</th><th>External map</th><th>Room types</th><th title="Blank: applies whatever is scheduled">if the room's event contains</th><th></th></tr></thead>
@@ -198,6 +225,37 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: defaultColor(d), internal: true, external: false }); })}>+ Add tag</button></p>
+      </>)}
+
+      {ctl === 'status' && (<>
+      <p className="muted">Status options for the Rooms table, colored like the dropdown in the rooms Google Sheet. Only rooms set to <b>Yes</b> are scheduled and counted, so Yes can't be renamed or deleted.</p>
+      <table className="table">
+        <thead><tr><th>Color</th><th>Name</th><th>Rooms</th><th></th></tr></thead>
+        <tbody>
+          {statuses.map((st) => {
+            const n = state.rooms.filter((r) => r.status === st.name).length;
+            const yes = st.name === 'Yes';
+            return (
+              <tr key={st.name}>
+                <td><ColorPicker value={st.color} existing={usedColors(state)} onChange={(x) => update((d) => { const y = d.config.roomStatuses?.find((z) => z.name === st.name); if (y) y.color = x; })} /></td>
+                <td><CommitInput value={st.name} disabled={yes} title={yes ? 'Only Yes rooms are scheduled and counted' : undefined} aria-label={`Status name ${st.name}`} onCommit={(v) => {
+                  if (!v || statuses.some((z) => z.name === v)) return setStatusMsg(v ? `${v} already exists.` : 'A status needs a name.');
+                  setStatusMsg(''); update((d) => {
+                    const y = d.config.roomStatuses?.find((z) => z.name === st.name); if (y) y.name = v;
+                    d.rooms.forEach((r) => { if (r.status === st.name) r.status = v; });
+                    d.config.proctors?.listed.forEach((m) => { if (m.field === 'status' && m.value === st.name) m.value = v; });
+                  });
+                }} /></td>
+                <td>{n}</td>
+                <td><button className="danger" disabled={yes || n > 0} title={yes ? 'Yes is needed for scheduling' : n ? `${n} rooms use ${st.name}` : undefined}
+                  onClick={() => update((d) => { d.config.roomStatuses = d.config.roomStatuses?.filter((z) => z.name !== st.name); })}>Delete</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p><input value={newStatus} placeholder="New status" onChange={(e) => setNewStatus(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addStatus()} /> <button onClick={addStatus}>+ Add status</button>{statusMsg && <span className="warn"> {statusMsg}</span>}</p>
+      </>)}
 
       <h2>Rooms</h2>
       <p className="muted"><span className="ovr-key">Highlighted</span> cells are overrides (room types only once a type rule exists). Clear a cell to go back to the formula. Only rooms set to <b>Yes</b> appear on the Schedule and floor plans and count toward capacity and proctors.</p>
@@ -210,8 +268,7 @@ export default function RoomsView({ state, update }: ViewProps) {
                 if (!v) return setRoomMsg('A room needs a name.');
                 setRoomMsg(''); setRoomField(r.id, 'name', v);
               }} /></td>
-              <td><select value={r.status ?? ''} onChange={(e) => update((d) => { d.rooms.find((x) => x.id === r.id)!.status = e.target.value; })}>
-                <option value="">—</option>{ROOM_STATUSES.map((x) => <option key={x}>{x}</option>)}</select></td>
+              <td><StatusSelect statuses={statuses} value={r.status ?? ''} onChange={(v) => update((d) => { d.rooms.find((x) => x.id === r.id)!.status = v; })} /></td>
               <td><CommitInput className="type-in" list="room-buildings" value={r.building} aria-label={`Building of ${r.name}`} onCommit={(v) => setRoomField(r.id, 'building', v)} /></td>
               <TypeCell state={state} update={update} r={r} rules={rules} />
               <td><input type="number" className="numin" value={r.base ?? ''} placeholder="—"
