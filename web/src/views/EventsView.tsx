@@ -1,4 +1,4 @@
-import { DAY_START, OTHER_GROUP, isSub, fmtTime, groupedEvents, uid, type EventT } from '../lib/model';
+import { DAY_START, OTHER_GROUP, isSub, fmtTime, groupedEvents, forgetEvent, uid, type EventT } from '../lib/model';
 import { ConfirmButton, EventTimeSelect, type ViewProps } from './common';
 import PhaseSchedule from './PhaseSchedule';
 
@@ -31,7 +31,7 @@ export default function EventsView({ state, update }: ViewProps) {
       {inSub ? <td colSpan={2} className="muted">{fmtTime(e.start)}–{fmtTime(e.end)} ({sub?.name})</td> : timeCells(e, [e.id])}
       <td><select className="cap-sel" value={e.capacityType} onChange={(x) => setEv(e.id, { capacityType: x.target.value })}>
         {state.capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
-      <td><ConfirmButton onConfirm={() => update((d) => { d.events = d.events.filter((x) => x.id !== e.id); d.blocks = d.blocks.filter((b) => b.eventId !== e.id); })} /></td>
+      <td><ConfirmButton onConfirm={() => update((d) => { d.events = d.events.filter((x) => x.id !== e.id); d.blocks = d.blocks.filter((b) => b.eventId !== e.id); forgetEvent(d, e.id); })} /></td>
     </tr>
   );
 

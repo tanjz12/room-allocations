@@ -285,3 +285,5 @@ h1.title { cursor: text; }
   .more-menu .menu { width: max-content; max-width: calc(100vw - 24px); white-space: normal; }
   .more-menu .menu button { text-align: left; }
 }
+.proctor-settings th { position: static; width: 170px; white-space: nowrap; }
+.proctor-settings textarea { width: 100%; min-width: 320px; font: inherit; }

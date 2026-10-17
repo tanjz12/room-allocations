@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ROOM_STATUSES, eventGroups, roomTypes, roomActive, roomCapacity, uid, type Category } from '../lib/model';
+import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, uid, type Category } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
+import SummarySettings from './SummarySettings';
 
 export default function RoomsView({ state, update }: ViewProps) {
   const [newCap, setNewCap] = useState('');
@@ -43,6 +44,7 @@ export default function RoomsView({ state, update }: ViewProps) {
               <td><button className="danger" onClick={() => {
                 if (state.events.some((e) => e.capacityType === c.id)) return setMsg(`Events still use ${c.name}; change their capacity type first.`);
                 if (state.summaryTotals.some((x) => x.capType === c.id)) return setMsg(`A summary total still uses ${c.name}; change it below first.`);
+                if ([state.config.proctors?.minCap, state.config.proctors?.idealCap].includes(c.id)) return setMsg(`Proctors still use ${c.name}; change it below first.`);
                 update((d) => { d.capTypes = d.capTypes.filter((x) => x.id !== c.id); d.rooms.forEach((r) => delete r.overrides[c.id]); });
               }}>Delete</button></td>
             </tr>
@@ -50,38 +52,7 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
-      <h3>Summary totals</h3>
-      <p className="muted">
-        Shown first in the Schedule summary: the chosen capacity type added up over every room with the tag, whether or not it is scheduled, unless “Only rooms with” picks an event or event group
-        Event totals add up each event's own capacity type (set on Events) over the rooms assigned to it.
-      </p>
-      <table className="table">
-        <thead><tr><th>Total</th><th>Rooms tagged</th><th>Capacity type</th><th>Only rooms with</th></tr></thead>
-        <tbody>
-          {state.summaryTotals.map((x, i) => (
-            <tr key={x.id}>
-              <td><input value={x.label} onChange={(e) => update((d) => { d.summaryTotals[i].label = e.target.value; })} /></td>
-              <td><select value={x.tagId} onChange={(e) => update((d) => { d.summaryTotals[i].tagId = e.target.value; })}>
-                {state.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></td>
-              <td><select value={x.capType} onChange={(e) => update((d) => { d.summaryTotals[i].capType = e.target.value; })}>
-                {state.capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></td>
-              <td><select value={x.eventIds?.[0] ? `e:${x.eventIds[0]}` : x.eventGroups?.[0] ? `g:${x.eventGroups[0]}` : ''}
-                onChange={(e) => update((d) => {
-                  const t = d.summaryTotals[i]; const v = e.target.value;
-                  delete t.eventIds; delete t.eventGroups;
-                  if (v.startsWith('e:')) t.eventIds = [v.slice(2)];
-                  if (v.startsWith('g:')) t.eventGroups = [v.slice(2)];
-                })}>
-                <option value="">any room</option>
-                <optgroup label="Event group">{eventGroups(state).map((g) => <option key={g} value={`g:${g}`}>{g}</option>)}</optgroup>
-                <optgroup label="Event">{state.events.map((ev) => <option key={ev.id} value={`e:${ev.id}`}>{ev.name}</option>)}</optgroup>
-              </select></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <SummarySettings state={state} update={update} />
 
       <h2>Tags</h2>
       <p className="muted">Each tag applies to the room types listed with it, and, if event groups are picked, only to rooms whose scheduled events are all (or any, if chosen) in those groups (“also when nothing is scheduled” covers empty rooms). Tags also set the room sign box color. Tags color the floor plans and generated maps (when “color by tag” is chosen, using the first tag) and decide which rooms appear on the internal vs external maps (a room shows if any of its tags is marked for that map; untagged rooms show on internal maps only). “Not colored on” leaves a tag's rooms blank on that building's maps.</p>

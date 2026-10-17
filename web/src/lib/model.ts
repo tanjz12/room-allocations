@@ -219,6 +219,14 @@ export function proctorHalves(state: State) {
     { label: P.halves[1], first: false, slots: SLOTS.filter((t) => t >= (split?.end ?? 720)) },
   ] : [{ label: '', first: false, slots: SLOTS }]).map((h) => ({ ...h, min: peak(h.slots, P.minCap), ideal: peak(h.slots, P.idealCap) }));
 }
+/** Drops a deleted event from the summary settings. */
+export function forgetEvent(d: State, id: string) {
+  const drop = (ids?: string[]) => ids?.filter((x) => x !== id);
+  d.config.summaryEventIds = drop(d.config.summaryEventIds)!;
+  for (const t of d.summaryTotals) if (t.eventIds?.includes(id)) delete t.eventIds;
+  const P = d.config.proctors;
+  if (P) { P.excludeIds = drop(P.excludeIds)!; P.rows.forEach((r) => { r.eventIds = drop(r.eventIds)!; }); }
+}
 export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
   !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId
     && (x.eventIds?.includes(b.eventId) || !!x.eventGroups?.includes(state.events.find((e) => e.id === b.eventId)?.group ?? '\u0000')));
