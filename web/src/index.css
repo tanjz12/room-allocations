@@ -46,11 +46,14 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .chips { max-width: 700px; }
 .chip { display: inline-block; background: #eef1f6; border-radius: 10px; padding: 1px 7px; margin: 1px 2px; white-space: nowrap; }
 /* schedule */
-.schedule-view { display: flex; flex-direction: column; height: 100%; }
+/* The summary scrolls away with the page; the toolbar and grid then fill the visible area (main's height). */
+main { container-type: size; }
+.schedule-view { display: flex; flex-direction: column; }
+.sched-main { height: 100cqh; display: flex; flex-direction: column; }
 .schedule-view .toolbar { padding: 8px 16px; background: #fff; border-bottom: 1px solid #ddd; }
-.grid-wrap { flex: 1; overflow: auto; }
+.grid-wrap { flex: 1; min-height: 0; overflow: auto; }
 @media (max-width: 600px), (max-height: 600px) {
-  .schedule-view { height: auto; }
+  .sched-main { height: auto; }
   .grid-wrap { flex: none; overflow: visible; }
 }
 .grid { display: grid; position: relative; width: max-content; background: #fff; }

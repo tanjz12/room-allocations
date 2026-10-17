@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { exportName, type NoteStyle, type RoomSign, type SignConfig, type TypstConfig, type TypstDriveFile } from '../lib/config';
 import { DEFAULT_BOX_GAP, DEFAULT_HEADING, DEFAULT_LOGO, DEFAULT_SIGN_COLOR, SIGN_H, SIGN_W, buildSigns, loadSignFont, defaultLabel, logoFromFile, logoSize, signEvents, signRooms, signSvg, signsPdf, type Logo, type SignFont } from '../lib/signs';
 import { pickFolder, readTypst, saveSignsPdf, saveTypst } from '../lib/drive';
-import { defaultTypst, typstRooms } from '../lib/typstTemplate';
+import { TYPST_HELPERS, defaultTypst, typstData } from '../lib/typstTemplate';
 import type { ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import FontControl from './FontControl';
@@ -102,10 +102,19 @@ export default function SignsSection({ state, update }: ViewProps) {
     { name: cfg.font ? `${cfg.font.name}.ttf` : 'IBMPlexSans-Regular.ttf', b64: fset.text.b64 },
     ...(fset.number !== fset.text ? [{ name: cfg.numberFont ? `${cfg.numberFont.name}.ttf` : 'IBMPlexSans-Medium.ttf', b64: fset.number.b64 }] : [])
   ] : [];
-  const tyData = tyOpen && fset && logoReady ? typstRooms(signs, cfg, fset, logo) : null;
-  const roomsJson = tyData ? JSON.stringify(tyData.rooms, null, 1) : '';
-  const previewJson = (ids: string[]) => JSON.stringify(ids.map((id) => tyData!.rooms.find((r) => r.room === id && r.copy === 1)).filter(Boolean), null, 1);
-  const code = tcfg.code ?? (tyData && fset ? defaultTypst(cfg, fset, tyData.footer, logoFile) : '');
+  const tyData = tyOpen && fset && logoReady ? typstData(state, signs) : null;
+  /** Data files for Typst; with ids (a preview), only those rooms, in that order, with one page each. */
+  const dataFiles = (ids?: string[]) => {
+    if (!tyData) return [];
+    const keep = <T extends { room: string }>(xs: T[]) => (ids ? ids.map((id) => xs.find((x) => x.room === id)).filter((x): x is T => !!x) : xs);
+    return [
+      { name: 'rooms.json', note: `${tyData.rooms.length} rooms`, text: JSON.stringify(keep(tyData.rooms).map((r) => (ids ? { ...r, doors: 1 } : r)), null, 1) },
+      { name: 'schedule.json', note: 'tags and events', text: JSON.stringify(keep(tyData.schedule), null, 1) },
+      { name: 'notes.json', note: 'sign notes', text: JSON.stringify(keep(tyData.notes), null, 1) },
+      { name: 'helpers.typ', note: 'helper functions', text: TYPST_HELPERS }
+    ];
+  };
+  const code = tcfg.code ?? (tyData && fset ? defaultTypst(cfg, fset, logoFile) : '');
   const extraFonts = (tcfg.files ?? []).filter((f) => /\.(ttf|otf)$/i.test(f.name));
   const generateTypst = async (ids?: string[]) => {
     if (!tyData) return;
@@ -114,7 +123,7 @@ export default function SignsSection({ state, update }: ViewProps) {
     try {
       const { compileTypst } = await import('../lib/typstCompile');
       setTyBusy('Generating…');
-      const files = [{ path: 'rooms.json', data: new TextEncoder().encode(ids ? previewJson(ids) : roomsJson) }];
+      const files = dataFiles(ids).map((f) => ({ path: f.name, data: new TextEncoder().encode(f.text) }));
       if (logoFile) files.push({ path: logoFile, data: new Uint8Array(await (await fetch(cfg.logo!)).arrayBuffer()) });
       for (const f of tcfg.files ?? []) files.push({ path: f.name, data: bytes(f.data) });
       const fontKey = [...fontFiles, ...extraFonts.map((f) => ({ name: f.name, b64: f.data }))].map((f) => `${f.name}:${f.b64.length}`).join('|');
@@ -179,7 +188,7 @@ export default function SignsSection({ state, update }: ViewProps) {
   };
   const openBlob = (data: BlobPart, type: string) => window.open(URL.createObjectURL(new Blob([data], { type })), '_blank');
   const panelFiles: { name: string; note: string; open: () => void; remove?: () => void }[] = [
-    { name: 'rooms.json', note: `${tyData?.rooms.length ?? 0} pages`, open: () => openBlob(roomsJson, 'application/json') },
+    ...dataFiles().map((f) => ({ name: f.name, note: f.note, open: () => openBlob(f.text, 'application/json') })),
     ...(logoFile ? [{ name: logoFile, note: 'logo', open: () => window.open(cfg.logo!, '_blank') }] : []),
     ...fontFiles.map((f, i) => ({ name: f.name, note: i ? 'room number font' : 'sign font', open: () => openBlob(bytes(f.b64) as BlobPart, 'font/ttf') })),
     ...(tcfg.files ?? []).map((f) => ({ name: f.name, note: 'uploaded', open: () => openBlob(bytes(f.data) as BlobPart, 'application/octet-stream'), remove: () => setTyCfg({ files: (tcfg.files ?? []).filter((x) => x.name !== f.name) }) }))

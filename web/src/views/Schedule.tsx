@@ -37,6 +37,7 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
   return (
     <div className="schedule-view">
       <Summary state={state} update={update} setTime={setTime} />
+      <div className="sched-main">
       <div className="toolbar">
         <label>Place event:&nbsp;
           <select value={paint} onChange={(e) => setPaint(e.target.value)}>
@@ -136,6 +137,7 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
