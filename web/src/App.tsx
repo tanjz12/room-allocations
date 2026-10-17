@@ -12,7 +12,7 @@ import { driveAccount, finishSignIn, fmtSaved, signInDrive, loadDrive, pickPacka
 import Privacy from './views/Privacy';
 import { packageFile, packageText, readPackage } from './lib/package';
 
-const TABS = ['Schedule', 'Capacity by use', 'Floor plans', 'Events', 'Rooms', 'Maps & Room signs'] as const;
+const TABS = ['Schedule', 'Capacity breakdown', 'Floor plans', 'Events', 'Rooms', 'Maps & Room signs'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -191,7 +191,7 @@ export default function App() {
       </header>
       <main>
         {tab === 'Schedule' && <Schedule {...props} />}
-        {tab === 'Capacity by use' && <CapacityView {...props} />}
+        {tab === 'Capacity breakdown' && <CapacityView {...props} />}
         {tab === 'Floor plans' && <MapView {...props} />}
         {tab === 'Events' && <EventsView {...props} />}
         {tab === 'Rooms' && <RoomsView {...props} />}

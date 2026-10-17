@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { eventTotals, fmtTime, procRooms, proctorHalves, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
+import { eventTotals, fmtTime, procRooms, proctorHalves, proctorLabel, roomCapacity, summaryTotalValue, type ProcRoom, type Room } from '../lib/model';
 import { Swatch, type ViewProps } from './common';
 
 export default function Summary({ state, update, setTime }: Pick<ViewProps, 'state' | 'update' | 'setTime'>) {
@@ -23,9 +23,11 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
     );
   };
   type Part = { key: string; node: ReactNode };
+  // "Large (Ana, Bo)" counts as Large.
+  const baseType = (t: string) => t.replace(/\s*\(.*$/, '') || t;
   const breakdownParts = (rooms: ProcRoom[]): Part[] => {
     const byType = new Map<string, number>();
-    for (const { r } of rooms) if (!big(r)) byType.set(r.type, (byType.get(r.type) ?? 0) + 1);
+    for (const { r } of rooms) if (!big(r)) { const t = baseType(r.type); byType.set(t, (byType.get(t) ?? 0) + 1); }
     return [
       ...[...byType].map(([t, n]) => ({ key: t, node: `${n} ${t}` })),
       ...rooms.filter(({ r }) => big(r)).sort((x, y) => x.r.name.localeCompare(y.r.name))
@@ -40,6 +42,16 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
   };
   const classroomProctors = (rooms: ProcRoom[]) =>
     rooms.reduce((n, { r, v }) => n + (big(r) ? 0 : v), 0);
+  const oneDay = (rooms: ProcRoom[]) => {
+    const parts = breakdownParts(rooms);
+    const small = parts.filter((p) => !rooms.some(({ r }) => r.id === p.key && big(r)));
+    const bigParts = parts.filter((p) => !small.includes(p));
+    const bigN = rooms.reduce((n, { r, v }) => n + (big(r) ? v : 0), 0);
+    return [
+      small.length > 0 && <span key="s" className="muted small">{P?.smallLabel}: {joinPlus(small)}, {classroomProctors(rooms)} proctors</span>,
+      bigParts.length > 0 && <span key="b" className="muted small">{P?.bigType}: {joinPlus(bigParts)}, {bigN} proctors</span>,
+    ];
+  };
   const twoLines = (rooms: ProcRoom[]) => {
     const parts = breakdownParts(rooms);
     if (!parts.length) return ['No rooms'];
@@ -78,8 +90,9 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
       {halves.length > 0 && <div className="summary">
         {halves.map((h) => (
           <div key={h.label} className="stat proctors">
-            <span>{h.label} proctors</span>
+            <span>{proctorLabel(h.label)}</span>
             <b>{h.min.n} <small>min</small> · {h.ideal.n} <small>ideal</small></b>
+            {!P?.halves ? oneDay(h.min.rooms) : <>
             {((h.first && morningRows.length > 0) || classroomProctors(h.min.rooms) > 0) && <span className="muted small">{P?.smallLabel}: {h.first && morningRows.length > 0
               ? morningRows.map(({ label, eventIds }) => `${label} ${classroomProctors(roomsOf(eventIds))}`).join(' · ')
               : classroomProctors(h.min.rooms)}</span>}
@@ -89,6 +102,7 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
             {h.first && morningRows.map(({ label, eventIds }) => (
               <span key={label} className="muted small">{label}: {breakdown(roomsOf(eventIds))}</span>
             ))}
+            </>}
           </div>
         ))}
       </div>}

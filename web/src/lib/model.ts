@@ -197,6 +197,7 @@ export function highlightTotals(state: State) {
   return { items, total: items.reduce((a, x) => a + x.total, 0) };
 }
 export type ProcRoom = { r: Room; v: number };
+export const proctorLabel = (half: string) => (half ? `${half} proctors` : 'Proctors');
 export const procRooms = (state: State, roomIds: Iterable<string>, capId: string): ProcRoom[] =>
   [...new Set(roomIds)].map((id) => state.rooms.find((x) => x.id === id && roomActive(x))).filter((r) => !!r)
     .map((r) => ({ r, v: roomCapacity(state, r, capId).value ?? 0 }));
@@ -212,10 +213,10 @@ export function proctorHalves(state: State) {
   };
   const peak = (slots: number[], capId: string) =>
     slots.map((t) => proctorsAt(t, capId)).reduce((best, x) => (x.n > best.n ? x : best), { n: 0, rooms: [] as ProcRoom[] });
-  return [
+  return (P.halves ? [
     { label: P.halves[0], first: true, slots: SLOTS.filter((t) => t < (split?.start ?? 720)) },
     { label: P.halves[1], first: false, slots: SLOTS.filter((t) => t >= (split?.end ?? 720)) },
-  ].map((h) => ({ ...h, min: peak(h.slots, P.minCap), ideal: peak(h.slots, P.idealCap) }));
+  ] : [{ label: '', first: false, slots: SLOTS }]).map((h) => ({ ...h, min: peak(h.slots, P.minCap), ideal: peak(h.slots, P.idealCap) }));
 }
 export const summaryTotalValue = (state: State, x: SummaryTotal) =>
   state.rooms.filter((r) => roomActive(r) && roomTags(state, r).some((y) => y.id === x.tagId))

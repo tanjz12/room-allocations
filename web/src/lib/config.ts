@@ -8,9 +8,9 @@ export type Highlight = { label: string; title: string; eventIds: string[]; lead
 /** Events listed together under one heading on Events, sharing start/end. */
 export type Subgroup = { name: string; eventIds: string[]; afterId?: string };
 export type ProctorRow = { label: string; eventIds: string[] };
-/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot before/after the split phase. */
+/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot before/after the split phase (or of the whole day without `halves`). */
 export type Proctors = {
-  group: string; excludeIds: string[]; splitPhaseId?: string; halves: [string, string];
+  group: string; excludeIds: string[]; splitPhaseId?: string; halves?: [string, string];
   minCap: string; idealCap: string; bigType: string; smallLabel: string; rows: ProctorRow[]; note?: string;
 };
 /** Events in `eventIds` need `minutes` free before and after them in the same room. */
