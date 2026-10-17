@@ -205,7 +205,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
             </div>
           ))}
           <div>
-            <button onClick={addColor}>+ Add color</button>{' '}
+            <button onClick={addColor}>+ Add group</button>{' '}
             {colors.length > 0 && <button onClick={saveOption}>Save as option</button>}{' '}
             {opt && <button className="danger" onClick={deleteOption}>Delete option</button>}
           </div>
