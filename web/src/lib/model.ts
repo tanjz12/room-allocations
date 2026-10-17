@@ -15,8 +15,7 @@ export type Phase = { id: string; name: string; color: string; start: number; en
 export function phaseTimes(p: Phase, key: string): { start: number; end: number } {
   return p.times?.[key] ?? (key === 'int' ? { start: p.intStart, end: p.intEnd } : { start: p.start, end: p.end });
 }
-/** `hideOn`: map names where this tag's rooms are left uncolored. */
-export type Category = { id: string; name: string; color: string; internal: boolean; external: boolean; hideOn?: string[]; eventGroups?: string[]; eventMatch?: 'any' | 'all'; whenEmpty?: boolean };
+export type Category = { id: string; name: string; color: string; internal: boolean; external: boolean; eventGroups?: string[]; eventMatch?: 'any' | 'all'; whenEmpty?: boolean };
 /** Tags are stored as `categories` and assigned per room type in `typeTags`. A tag with `eventGroups` applies only when all
  * (or, with `eventMatch: 'any'`, any) of the room's scheduled events are in those groups; with nothing scheduled, only if `whenEmpty`. */
 export const roomTags = (s: State, r: Room) => {

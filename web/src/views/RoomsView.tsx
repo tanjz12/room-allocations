@@ -55,9 +55,9 @@ export default function RoomsView({ state, update }: ViewProps) {
       <SummarySettings state={state} update={update} />
 
       <h2>Tags</h2>
-      <p className="muted">Each tag applies to the room types listed with it, and, if event groups are picked, only to rooms whose scheduled events are all (or any, if chosen) in those groups (“also when nothing is scheduled” covers empty rooms). Tags also set the room sign box color. Tags color the floor plans and generated maps (when “color by tag” is chosen, using the first tag) and decide which rooms appear on the internal vs external maps (a room shows if any of its tags is marked for that map; untagged rooms show on internal maps only). “Not colored on” leaves a tag's rooms blank on that building's maps.</p>
+      <p className="muted">Each tag applies to the room types listed with it, and, if event groups are picked, only to rooms whose scheduled events are all (or any, if chosen) in those groups (“also when nothing is scheduled” covers empty rooms). Tags also set the room sign box color. Tags color the floor plans and generated maps (when “color by tag” is chosen, using the first tag) and decide which rooms appear on the internal vs external maps (a room shows if any of its tags is marked for that map; untagged rooms show on internal maps only). Only rooms with status Yes are colored.</p>
       <table className="table">
-        <thead><tr><th>Color</th><th>Name</th><th>Internal map</th><th>External map</th><th>Room types</th><th title="Blank: applies whatever is scheduled">if the room's event contains</th><th>Not colored on</th><th></th></tr></thead>
+        <thead><tr><th>Color</th><th>Name</th><th>Internal map</th><th>External map</th><th>Room types</th><th title="Blank: applies whatever is scheduled">if the room's event contains</th><th></th></tr></thead>
         <tbody>
           {state.categories.map((c) => (
             <tr key={c.id}>
@@ -86,10 +86,6 @@ export default function RoomsView({ state, update }: ViewProps) {
                 ))}
                 {!!c.eventGroups?.length && <label className="when-empty"><input type="checkbox" checked={!!c.whenEmpty} onChange={(x) => setCat(c.id, { whenEmpty: x.target.checked || undefined })} />also when nothing is scheduled</label>}
               </td>
-              <td className="hide-on">{state.config.maps.map((m) => m.name).map((b) => (
-                <label key={b}><input type="checkbox" checked={!!c.hideOn?.includes(b)}
-                  onChange={(x) => setCat(c.id, { hideOn: x.target.checked ? [...(c.hideOn ?? []), b] : (c.hideOn ?? []).filter((h) => h !== b) })} />{b}</label>
-              ))}</td>
               <td><ConfirmButton onConfirm={() => update((d) => {
                 d.categories = d.categories.filter((x) => x.id !== c.id);
                 for (const t of Object.keys(d.typeTags)) d.typeTags[t] = d.typeTags[t].filter((x) => x !== c.id);
@@ -98,7 +94,7 @@ export default function RoomsView({ state, update }: ViewProps) {
           ))}
         </tbody>
       </table>
-      <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: '#aaaaaa', internal: true, external: false, hideOn: [] }); })}>+ Add tag</button></p>
+      <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: '#aaaaaa', internal: true, external: false }); })}>+ Add tag</button></p>
 
       <h2>Rooms</h2>
       <p className="muted"><span className="ovr-key">Highlighted</span> cells are overrides. Clear a cell to go back to the formula. Only rooms set to <b>Yes</b> appear on the Schedule and floor plans and count toward capacity and proctors.</p>

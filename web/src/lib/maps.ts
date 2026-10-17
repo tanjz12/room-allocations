@@ -30,7 +30,6 @@ export function roomEntry(s: State, roomId: string, t: number, colorBy: ColorBy,
   const e = roomEventsAt(s, roomId, t).filter((x) => !only || only(x))[0];
   if (!room || !e) return null;
   const tags = roomTags(s, room);
-  if (tags.length && tags.every((c) => c.hideOn?.includes(room.building))) return null;
   if (variant === 'external' && !tags.some((c) => c.external)) return null;
   if (variant === 'internal' && tags.length && !tags.some((c) => c.internal)) return null;
   const tag = tags[0];
