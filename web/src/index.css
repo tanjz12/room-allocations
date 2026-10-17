@@ -317,23 +317,23 @@ h1.title { cursor: text; }
 .color-trigger { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; align-items: center; text-align: left; }
 .color-trigger:hover { text-decoration: underline; background: none; }
 .color-backdrop { display: none; }
-.color-pop { position: fixed; z-index: 1000; width: 252px; box-sizing: border-box; background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.color-pop-head { display: flex; align-items: center; gap: 6px; }
-.color-cur { width: 28px; height: 28px; border-radius: 4px; border: 1px solid rgba(0,0,0,.2); flex: none; }
-.color-pop-head input { flex: 1; min-width: 0; font-family: monospace; font-size: 16px; }
-.color-close { border: none; background: none; font-size: 16px; padding: 2px 6px; cursor: pointer; }
+.color-pop { position: fixed; z-index: 1000; width: 184px; box-sizing: border-box; background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.color-pop-head { display: flex; align-items: center; gap: 5px; }
+.color-cur { width: 26px; height: 26px; border-radius: 4px; border: 1px solid rgba(0,0,0,.2); flex: none; box-sizing: border-box; }
+.color-pop-head input:not([type]) { flex: 1; min-width: 0; width: 0; font-family: monospace; font-size: 14px; padding: 3px 4px; }
+.color-pop-head .color-more { flex: none; width: 30px; height: 28px; padding: 0; border: 1px solid #bbb; border-radius: 4px; background: none; cursor: pointer; }
 .color-sugg-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #666; }
-.color-shuffle { font-size: 12px; padding: 1px 6px; }
-.color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.color-cell { height: 30px; border: 1px solid rgba(0,0,0,.2); border-radius: 4px; padding: 0; cursor: pointer; }
+.color-shuffle, .color-close { border: none; background: none; font-size: 15px; line-height: 1; padding: 2px 5px; cursor: pointer; color: #444; }
+.color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.color-cell { height: 36px; border: 1px solid rgba(0,0,0,.2); border-radius: 4px; padding: 0; cursor: pointer; }
 .color-cell:hover, .color-cell.on { outline: 2px solid #333; outline-offset: 1px; }
-.color-more { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; cursor: pointer; }
-.color-more input[type=color] { width: 48px; height: 32px; padding: 0; border: 1px solid #bbb; border-radius: 4px; background: none; }
 @media (max-width: 600px) {
   .color-backdrop { display: block; position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,.25); }
-  .color-pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; border-radius: 14px 14px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); gap: 12px; }
-  .color-cell { height: 44px; }
-  .color-more { font-size: 15px; }
-  .color-more input[type=color] { width: 64px; height: 40px; }
+  .color-pop { left: 50% !important; top: auto !important; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: 232px; padding: 12px; gap: 10px; border-radius: 12px; }
+  .color-cur { width: 34px; height: 34px; }
+  .color-pop-head input:not([type]) { font-size: 16px; padding: 6px; }
+  .color-pop-head .color-more { width: 40px; height: 36px; }
+  .color-cell { height: 52px; }
+  .color-shuffle, .color-close { font-size: 20px; padding: 4px 8px; }
   .color-btn { width: 40px; height: 30px; }
 }
