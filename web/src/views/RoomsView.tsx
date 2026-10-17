@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ROOM_STATUSES, roomTypes, roomActive, roomCapacity, uid, type Category } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
-import { usedColors } from '../lib/colors';
+import { usedColors, defaultColor } from '../lib/colors';
 
 export default function RoomsView({ state, update }: ViewProps) {
   const [newCap, setNewCap] = useState('');
@@ -94,7 +94,7 @@ export default function RoomsView({ state, update }: ViewProps) {
           ))}
         </tbody>
       </table>
-      <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: '#aaaaaa', internal: true, external: false }); })}>+ Add tag</button></p>
+      <p><button onClick={() => update((d) => { d.categories.push({ id: uid('c'), name: 'New tag', color: defaultColor(d), internal: true, external: false }); })}>+ Add tag</button></p>
 
       <h2>Rooms</h2>
       <p className="muted"><span className="ovr-key">Highlighted</span> cells are overrides. Clear a cell to go back to the formula. Only rooms set to <b>Yes</b> appear on the Schedule and floor plans and count toward capacity and proctors.</p>

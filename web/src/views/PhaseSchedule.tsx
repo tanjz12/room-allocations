@@ -3,7 +3,7 @@ import type { PhaseSchedule as Sched } from '../lib/config';
 import { DAY_END, DAY_START, applyPhaseRefs, fmtTime, phaseTimes, textColor, uid, type Phase } from '../lib/model';
 import { TimeSelect, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
-import { usedColors } from '../lib/colors';
+import { usedColors, defaultColor } from '../lib/colors';
 
 const HOURS: number[] = [];
 for (let t = DAY_START; t <= DAY_END; t += 60) HOURS.push(t);
@@ -161,7 +161,7 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
               ))}
             </tbody>
           </table>
-          <button onClick={() => setDraft({ ...draft, phases: [...draft.phases, { id: uid('p'), name: 'New phase', color: '#dddddd', start: DAY_START + 60, end: DAY_START + 120, intStart: DAY_START + 60, intEnd: DAY_START + 120 }] })}>+ Add phase</button>
+          <button onClick={() => setDraft({ ...draft, phases: [...draft.phases, { id: uid('p'), name: 'New phase', color: defaultColor(state, draft.phases.map((p) => p.color)), start: DAY_START + 60, end: DAY_START + 120, intStart: DAY_START + 60, intEnd: DAY_START + 120 }] })}>+ Add phase</button>
         </>
       )}
     </div>

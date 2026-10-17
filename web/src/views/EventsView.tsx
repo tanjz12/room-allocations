@@ -2,7 +2,7 @@ import { DAY_START, OTHER_GROUP, isSub, fmtTime, groupedEvents, forgetEvent, uid
 import { ConfirmButton, EventTimeSelect, type ViewProps } from './common';
 import PhaseSchedule from './PhaseSchedule';
 import ColorPicker from './ColorPicker';
-import { usedColors } from '../lib/colors';
+import { usedColors, defaultColor } from '../lib/colors';
 
 export default function EventsView({ state, update }: ViewProps) {
   const sub = state.config.subgroup;
@@ -14,7 +14,7 @@ export default function EventsView({ state, update }: ViewProps) {
   const setTimes = (ids: string[], patch: (e: EventT) => Partial<EventT>) =>
     update((d) => { const p = patch(d.events.find((e) => e.id === ids[0])!); d.events.forEach((e) => { if (ids.includes(e.id)) Object.assign(e, p); }); });
   const addEvent = (group: string) => update((d) => {
-    d.events.push({ id: uid('e'), name: 'New event', color: '#88ccee', start: DAY_START + 120, end: DAY_START + 180, startRef: null, endRef: null, capacityType: 'base', group });
+    d.events.push({ id: uid('e'), name: 'New event', color: defaultColor(d), start: DAY_START + 120, end: DAY_START + 180, startRef: null, endRef: null, capacityType: 'base', group });
   });
   const timeCells = (e: EventT, ids: string[]) => <>
     <td><EventTimeSelect state={state} value={e.start} timeRef={e.startRef}

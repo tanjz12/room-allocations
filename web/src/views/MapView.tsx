@@ -9,9 +9,8 @@ import { ConfirmButton, Swatch, TimePicker, type ViewProps } from './common';
 import MapUpload from './MapUpload';
 import type { SameColor } from '../lib/config';
 import ColorPicker from './ColorPicker';
-import { usedColors } from '../lib/colors';
+import { usedColors, defaultColor } from '../lib/colors';
 
-const PALETTE = ['#4a7fc1', '#e07b39', '#5aa469', '#c0504d', '#8064a2', '#f2c14e', '#4bacc6', '#9c6b4e'];
 
 export function useFont() {
   const [font, setFont] = useState<Font | null>(null);
@@ -35,7 +34,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     const o = opt && d.config.colorOptions?.find((x) => x.id === opt.id);
     if (o) fn(o.colors); else fn(d.config.sameColors ??= []);
   });
-  const addColor = () => editColors((l) => { l.push({ id: uid('sc'), name: '', color: PALETTE[l.length % PALETTE.length], groups: [], eventIds: [] }); });
+  const addColor = () => editColors((l) => { l.push({ id: uid('sc'), name: '', color: defaultColor(state, l.map((c) => c.color)), groups: [], eventIds: [] }); });
   const saveOption = () => {
     const id = uid('opt');
     update((d) => {

@@ -73,14 +73,14 @@ const svgFills = (svg: string) => [...new Set([...svg.matchAll(/fill(?:="|:\s*)(
 
 // Light colors from Paper Heart Design's "Peaceful Palettes" (paperheartdesign.com/blog/color-palette-peaceful-palettes).
 const PRETTY = ['#86b9b0', '#8eaebb', '#afb4ad', '#b3cde4', '#bdd9cd', '#bed4e9', '#c4b3a9', '#ccb0be', '#cfcad1', '#d2e1cc', '#d6cfbf', '#d9ae8e',
-  '#d9d7c2', '#dac4d0', '#daeaf7', '#e2c58d', '#e7c8e7', '#f7a49e', '#f7c6c2', '#fdefc0', '#feb640', '#ffddba', '#ffdf7c'];
+  '#d9d7c2', '#dac4d0', '#daeaf7', '#e2c58d', '#e7c8e7', '#f7a49e', '#f7c6c2', '#fdefc0', '#ffddba', '#ffdf7c'];
 const luminance = ([r, g, b]: RGB) => { const f = (c: number) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
 /** Black text on it has at least 7:1 contrast. */
 const blackReadable = (hex: string) => luminance(hexRgb(hex)!) >= 0.3;
 
 const STYLE_POOL = [...new Set([
   ...PRETTY,
-  ...Array.from({ length: 60 }, (_, k) => k * 6).flatMap((h) => [0.35, 0.55, 0.75, 0.95].flatMap((s) => [0.76, 0.82, 0.88].map((l) => fromHsl(h, s, l)))),
+  ...Array.from({ length: 60 }, (_, k) => k * 6).flatMap((h) => [0.3, 0.45, 0.6, 0.72].flatMap((s) => [0.79, 0.84, 0.89].map((l) => fromHsl(h, s, l)))),
 ])].filter((c) => blackReadable(c) && luminance(hexRgb(c)!) <= 0.82).map((hex) => ({ hex, lab: labOf(hex) }));
 
 /**
@@ -109,3 +109,6 @@ export function suggestColors(existing: string[], n = 4, minExisting = 10, minEa
     }
   return pool.sort((a, b) => b.gap - a.gap).slice(0, n).map((c) => c.hex);
 }
+
+/** Default color for something new: one suggestion that stands apart from every color already in use (plus `extra`, e.g. unsaved drafts). */
+export const defaultColor = (s: State, extra: string[] = []) => suggestColors([...usedColors(s), ...extra], 1)[0];
