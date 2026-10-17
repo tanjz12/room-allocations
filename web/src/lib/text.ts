@@ -2,7 +2,7 @@ import { parse, type Font, type Path } from 'opentype.js';
 
 let fontP: Promise<Font> | null = null;
 export const loadFont = () =>
-  (fontP ??= fetch(`${import.meta.env.BASE_URL}fonts/Inter-Medium.ttf`).then((r) => r.arrayBuffer()).then((b) => parse(b)));
+  (fontP ??= fetch(`${import.meta.env.BASE_URL}fonts/IBMPlexSans-Medium.ttf`).then((r) => r.arrayBuffer()).then((b) => parse(b)));
 
 // Returns SVG path data for `text` with its left baseline at (x, y); shrinks to fit maxWidth.
 export function textPath(font: Font, text: string, x: number, y: number, size: number, maxWidth?: number, anchor: 'start' | 'middle' = 'start') {

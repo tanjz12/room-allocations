@@ -23,7 +23,7 @@ export const fmtSaved = (iso: string) => new Date(iso).toLocaleString([], { mont
 const TOKEN_KEY = 'room-alloc-google';
 const STATE_KEY = 'room-alloc-oauth-state';
 let token: { t: string; exp: number; email: string } | null = (() => {
-  try { const x = JSON.parse(sessionStorage.getItem(TOKEN_KEY) ?? 'null'); return x && x.exp > Date.now() ? x : null; } catch { return null; }
+  try { const x = JSON.parse(localStorage.getItem(TOKEN_KEY) ?? 'null'); return x && x.exp > Date.now() ? x : null; } catch { return null; }
 })();
 const redirectUri = () => location.origin + location.pathname;
 
@@ -38,9 +38,9 @@ let returned: { error?: string; pending?: Promise<string> } | null = (() => {
   if (p.has('error')) return { error: p.get('error') === 'access_denied' ? 'Google sign-in was cancelled' : `Google sign-in failed (${p.get('error')})` };
   if (!p.get('scope')?.split(' ').includes(SCOPE)) return { error: 'Google Drive access was not allowed. Sign in again and tick the Drive box' };
   token = { t: p.get('access_token')!, exp: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000, email: '' };
-  sessionStorage.setItem(TOKEN_KEY, JSON.stringify(token));
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(token));
   const pending = api('GET', '/drive/v3/about?fields=user(emailAddress)')
-    .then((r) => { if (token) { token.email = r.user.emailAddress; sessionStorage.setItem(TOKEN_KEY, JSON.stringify(token)); } return driveAccount(); })
+    .then((r) => { if (token) { token.email = r.user.emailAddress; localStorage.setItem(TOKEN_KEY, JSON.stringify(token)); } return driveAccount(); })
     .catch(() => driveAccount());
   return { pending };
 })();
@@ -66,7 +66,7 @@ export function signInDrive(): Promise<never> {
 }
 export function signOutDrive() {
   if (token) void fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token.t)}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-  token = null; sessionStorage.removeItem(TOKEN_KEY);
+  token = null; localStorage.removeItem(TOKEN_KEY);
 }
 
 /** A valid token, or off to Google's sign-in page (the page reloads afterwards; local edits are kept in the browser). */
@@ -81,7 +81,7 @@ async function api(method: string, path: string, body?: BodyInit, type = 'applic
   if (!r.ok) {
     let msg = text;
     try { msg = JSON.parse(text).error?.message ?? text; } catch { /* keep text */ }
-    if (r.status === 401) { token = null; sessionStorage.removeItem(TOKEN_KEY); }
+    if (r.status === 401) { token = null; localStorage.removeItem(TOKEN_KEY); }
     if (r.status === 403 || r.status === 404) throw new Error(`${driveAccount() || 'this Google account'} can't ${method === 'GET' ? 'open' : 'edit'} the Drive folder or file (${msg})`);
     throw new Error(`Google answered ${r.status}: ${msg}`);
   }

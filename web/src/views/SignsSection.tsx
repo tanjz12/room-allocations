@@ -20,14 +20,15 @@ export default function SignsSection({ state, update }: ViewProps) {
   const [nf, setNf] = useState<SignFont | null>(null);
   const numRef = useRef<HTMLInputElement>(null);
   const [noteEd, setNoteEd] = useState<{ roomId: string; note: string; style: NoteStyle } | null>(null);
-  const numName = cfg.numberFont?.name, numData = cfg.numberFont?.data;
+  const numName = cfg.numberFont?.name, numData = cfg.numberFont?.data, customText = !!cfg.font;
   useEffect(() => {
     let live = true;
-    if (numName && numData) loadSignFont({ name: numName, data: numData })
+    if (!(numName && numData) && customText) return;
+    loadSignFont(numName && numData ? { name: numName, data: numData } : undefined, 'number')
       .then((f) => { if (live) setNf(f); })
-      .catch(() => { if (live) setMsg({ err: "The room number font in this package can't be read; upload it again or use the event font." }); });
+      .catch(() => { if (live) setMsg({ err: "The room number font in this package can't be read; upload it again or use the default." }); });
     return () => { live = false; };
-  }, [numName, numData]);
+  }, [numName, numData, customText]);
   const fontName = cfg.font?.name, fontData = cfg.font?.data;
   useEffect(() => {
     let live = true;
@@ -51,7 +52,7 @@ export default function SignsSection({ state, update }: ViewProps) {
     if (v === '' || !Number.isFinite(+v)) return;
     setCfg({ [k]: Math.min(max, Math.max(min, +v * 72)) });
   };
-  const numSf = cfg.numberFont ? nf : sf;
+  const numSf = cfg.numberFont || !cfg.font ? nf : sf;
   const fset = sf && numSf ? { text: sf, number: numSf } : null;
   const fonts = fset ? { text: fset.text.font, number: fset.number.font } : null;
   const ready = !!fset && signs.length > 0 && logoReady && !busy;
@@ -112,16 +113,16 @@ export default function SignsSection({ state, update }: ViewProps) {
           <label title="Box color for rooms without a tag; tagged rooms use their tag color from Rooms → Tags">Untagged box color <input type="color" value={(cfg.color || DEFAULT_SIGN_COLOR).toLowerCase()} onChange={(e) => setCfg({ color: e.target.value })} /></label>
           <label>File name <input value={cfg.fileName ?? ''} placeholder="Room Signs" onChange={(e) => setCfg({ fileName: e.target.value })} /></label>
           <div className="wide logo-place">
-            <b>Font</b> <span>{cfg.font ? cfg.font.name : 'Inter (built in)'}</span>
+            <b>Font</b> <span>{cfg.font ? cfg.font.name : 'IBM Plex Sans (built in)'}</span>
             <button onClick={() => fontRef.current?.click()}>{cfg.font ? 'Replace font…' : 'Upload font…'}</button>
             {cfg.font && <button onClick={() => setCfg({ font: undefined })}>Use built-in</button>}
             <input ref={fontRef} type="file" accept=".ttf,font/ttf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void pickFont(f); }} />
             <span className="muted">.ttf file. Google Slides only shows it if it's a Google Font; the PDF always does.</span>
           </div>
           <div className="wide logo-place">
-            <b>Room number font</b> <span>{cfg.numberFont ? cfg.numberFont.name : 'same as the event font'}</span>
+            <b>Room number font</b> <span>{cfg.numberFont ? cfg.numberFont.name : cfg.font ? 'same as the event font' : 'IBM Plex Sans Medium (built in)'}</span>
             <button onClick={() => numRef.current?.click()}>{cfg.numberFont ? 'Replace…' : 'Upload font…'}</button>
-            {cfg.numberFont && <button onClick={() => setCfg({ numberFont: undefined })}>Use event font</button>}
+            {cfg.numberFont && <button onClick={() => setCfg({ numberFont: undefined })}>Use default</button>}
             <input ref={numRef} type="file" accept=".ttf,font/ttf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void pickNumFont(f); }} />
             <span className="muted">e.g. a Medium weight .ttf for the number in the box</span>
           </div>

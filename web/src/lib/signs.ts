@@ -239,13 +239,14 @@ export const validFont = (f: unknown): f is SignFontFile => {
   return !!x && typeof x === 'object' && typeof x.name === 'string' && typeof x.data === 'string' && /^[A-Za-z0-9+/=]+$/.test(x.data);
 };
 const fonts = new Map<string, Promise<SignFont>>();
-/** The uploaded font, or the built-in Inter when none is set. */
-export function loadSignFont(f?: SignFontFile): Promise<SignFont> {
-  const key = f?.data ?? '';
+const BUILT_IN = { text: { file: 'IBMPlexSans-Regular.ttf', family: 'IBM Plex Sans' }, number: { file: 'IBMPlexSans-Medium.ttf', family: 'IBM Plex Sans Medium' } };
+/** The uploaded font, or the built-in IBM Plex Sans (Medium for room numbers) when none is set. */
+export function loadSignFont(f?: SignFontFile, kind: 'text' | 'number' = 'text'): Promise<SignFont> {
+  const key = f?.data ?? `built-in:${kind}`;
   let p = fonts.get(key);
   if (!p) {
     p = f ? new Promise<SignFont>((ok) => ok({ font: parse(fromB64(f.data)), b64: f.data, family: f.name }))
-      : fetch(`${import.meta.env.BASE_URL}fonts/Inter-Medium.ttf`).then((r) => r.arrayBuffer()).then((b) => ({ font: parse(b), b64: toB64(b), family: 'Inter' }));
+      : fetch(`${import.meta.env.BASE_URL}fonts/${BUILT_IN[kind].file}`).then((r) => r.arrayBuffer()).then((b) => ({ font: parse(b), b64: toB64(b), family: BUILT_IN[kind].family }));
     p.catch(() => fonts.delete(key));
     fonts.set(key, p);
   }
