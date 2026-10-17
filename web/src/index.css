@@ -44,6 +44,10 @@ h2 { font-size: 15px; margin: 16px 0 8px; }
 .schedule-view { display: flex; flex-direction: column; height: 100%; }
 .schedule-view .toolbar { padding: 8px 16px; background: #fff; border-bottom: 1px solid #ddd; }
 .grid-wrap { flex: 1; overflow: auto; }
+@media (max-width: 600px), (max-height: 600px) {
+  .schedule-view { height: auto; }
+  .grid-wrap { flex: none; overflow: visible; }
+}
 .grid { display: grid; position: relative; width: max-content; background: #fff; }
 .corner, .room-head { position: sticky; top: 0; z-index: 3; background: #f0f0f4; border-bottom: 1px solid #ccc; border-right: 1px solid #e3e3e8; padding: 4px; height: 54px; overflow: hidden; }
 .corner { left: 0; z-index: 4; }

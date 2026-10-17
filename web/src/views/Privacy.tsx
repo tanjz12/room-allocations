@@ -5,10 +5,10 @@ export default function Privacy({ onBack }: { onBack: () => void }) {
     <div className="page privacy">
       <button className="linklike" onClick={onBack}>‹ Back</button>
       <h2>Privacy</h2>
-      <p className="muted">Last updated {UPDATED}. This room allocation site is run by Berkeley Math Tournament (BMT) for planning tournament rooms.</p>
+      <p className="muted">Last updated {UPDATED}.</p>
       <ul>
         <li><b>No accounts:</b> there's no login and no server of its own. The site runs in your browser.</li>
-        <li><b>Your data:</b> data packages stay in your browser's local storage, or in the Google Drive files and folders you choose. BMT doesn't receive or store them. Clearing site data, or More ▾ → Clear all data, removes them from the browser.</li>
+        <li><b>Your data:</b> data packages stay in your browser's local storage, or in the Google Drive files and folders you choose. This site doesn't receive or store them. Clearing site data, or More ▾ → Clear all data, removes them from the browser.</li>
         <li><b>Tracking:</b> no analytics, ads, cookies or other tracking. The site's host keeps standard request logs.</li>
       </ul>
       <h3>Google sign-in</h3>
