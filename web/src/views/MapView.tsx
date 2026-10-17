@@ -34,6 +34,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
     const o = opt && d.config.colorOptions?.find((x) => x.id === opt.id);
     if (o) fn(o.colors); else fn(d.config.sameColors ??= []);
   });
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const addColor = () => editColors((l) => { l.push({ id: uid('sc'), name: '', color: defaultColor(state, l.map((c) => c.color)), groups: [], eventIds: [] }); });
   const saveOption = () => {
     const id = uid('opt');
@@ -181,8 +182,10 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
       </div>
       {colorBy === 'event' && show !== 'focus' && (
         <div className="same-colors no-print">
-          <div><b>Same color</b>{opt && <> · option name <input className="opt-name" value={opt.name} placeholder="Option name" aria-label="Option name"
+          <div><button className="group-toggle" aria-expanded={groupsOpen} title={groupsOpen ? 'Collapse' : 'Expand'} onClick={() => setGroupsOpen(!groupsOpen)}>
+            {groupsOpen ? '▾' : '▸'} <b>Color groups</b>{!groupsOpen && colors.length > 0 && <span className="muted"> · {colors.length}</span>}</button>{opt && <> · option name <input className="opt-name" value={opt.name} placeholder="Option name" aria-label="Option name"
             onChange={(e) => { const v = e.target.value; update((d) => { const o = d.config.colorOptions?.find((x) => x.id === opt.id); if (o) o.name = v; }); }} /></>}</div>
+          {groupsOpen && <>
           {colors.map((c, i) => (
             <div key={c.id} className="same-color-row">
               <ColorPicker value={c.color} title="Color" existing={used} onChange={(e) => { const v = e; editColors((l) => { l[i].color = v; }); }} />
@@ -210,6 +213,7 @@ export default function MapView({ state, update, time, setTime }: ViewProps) {
             {colors.length > 0 && <button onClick={saveOption}>Save as option</button>}{' '}
             {opt && <button className="danger" onClick={deleteOption}>Delete option</button>}
           </div>
+          </>}
         </div>
       )}
       <div className={indivLegend ? 'legend legend-rows' : 'legend'}>
