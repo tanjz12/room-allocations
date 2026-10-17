@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { emptyConfig, type Config, type PillBound, type Proctors, type RoomSign } from './config';
+import { emptyConfig, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomSign } from './config';
 
 /** Only rooms with status Yes are scheduled or counted. */
 export type Room = { id: string; name: string; building: string; type: string; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
@@ -212,32 +212,36 @@ const boundTime = (state: State, b: PillBound | undefined, dflt: number) => {
 export function proctorPills(state: State) {
   const P = state.config.proctors;
   if (!P) return [];
-  const counted = state.events.filter((e) => e.group === P.group && !P.excludeIds.includes(e.id));
-  const proctorsAt = (t: number, capId: string) => {
-    const rooms = procRooms(state, state.blocks.filter((b) => counted.some((e) => e.id === b.eventId && eventAt(e, t))).map((b) => b.roomId), capId);
-    return { n: rooms.reduce((n, x) => n + x.v, 0), rooms };
-  };
-  const peak = (slots: number[], capId: string) =>
-    slots.map((t) => proctorsAt(t, capId)).reduce((best, x) => (x.n > best.n ? x : best), { n: 0, rooms: [] as ProcRoom[] });
   return P.pills.map((pill) => {
+    const counted = state.events.filter((e) => e.group === pill.group && !pill.excludeIds.includes(e.id));
+    const proctorsAt = (t: number, capId: string) => {
+      const rooms = procRooms(state, state.blocks.filter((b) => counted.some((e) => e.id === b.eventId && eventAt(e, t))).map((b) => b.roomId), capId);
+      return { n: rooms.reduce((n, x) => n + x.v, 0), rooms };
+    };
+    const peak = (slots: number[], capId: string) =>
+      slots.map((t) => proctorsAt(t, capId)).reduce((best, x) => (x.n > best.n ? x : best), { n: 0, rooms: [] as ProcRoom[] });
     const from = boundTime(state, pill.from, -Infinity), to = boundTime(state, pill.to, Infinity);
     const slots = SLOTS.filter((t) => t >= from && t < to);
     return { pill, slots, min: peak(slots, P.minCap), ideal: peak(slots, P.idealCap) };
   });
 }
-/** Turns the old morning/afternoon proctor settings into pills. */
-export function migrateProctors(P: Proctors & { splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] }) {
-  if (Array.isArray(P.pills)) return;
-  const at = (edge: 'start' | 'end'): PillBound => (P.splitPhaseId ? { phaseId: P.splitPhaseId, edge } : { time: 720 });
-  const small = P.smallLabel ?? 'Classrooms';
-  P.pills = P.halves ? [
-    { id: uid('pill'), name: proctorLabel(P.halves[0]), to: at('start'), lines: P.rows?.length ? P.rows.map((r) => ({ label: r.label, eventIds: r.eventIds })) : [{ label: '', eventIds: [] }] },
-    { id: uid('pill'), name: proctorLabel(P.halves[1]), from: at('end'), lines: [{ label: '', eventIds: [] }] },
-  ] : [{ id: uid('pill'), name: 'Proctors', lines: [
-    { label: small, eventIds: [], rooms: 'others' },
-    ...(P.bigType ? [{ label: P.bigType, eventIds: [], rooms: 'listed' as const }] : []),
-  ] }];
-  delete P.splitPhaseId; delete P.halves; delete P.smallLabel; delete P.rows;
+type OldProctors = Proctors & { group?: string; excludeIds?: string[]; splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] };
+/** Turns the old morning/afternoon proctor settings (one event group for all) into pills. */
+export function migrateProctors(P: OldProctors) {
+  const group = P.group ?? '', excludeIds = P.excludeIds ?? [];
+  if (!Array.isArray(P.pills)) {
+    const at = (edge: 'start' | 'end'): PillBound => (P.splitPhaseId ? { phaseId: P.splitPhaseId, edge } : { time: 720 });
+    const pill = (name: string, lines: ProctorLine[]): ProctorPill => ({ id: uid('pill'), name, group, excludeIds: [...excludeIds], lines });
+    P.pills = P.halves ? [
+      { ...pill(proctorLabel(P.halves[0]), P.rows?.length ? P.rows.map((r) => ({ label: r.label, eventIds: r.eventIds })) : [{ label: '', eventIds: [] }]), to: at('start') },
+      { ...pill(proctorLabel(P.halves[1]), [{ label: '', eventIds: [] }]), from: at('end') },
+    ] : [pill('Proctors', [
+      { label: P.smallLabel ?? 'Classrooms', eventIds: [], rooms: 'others' },
+      ...(P.bigType ? [{ label: P.bigType, eventIds: [], rooms: 'listed' as const }] : []),
+    ])];
+  }
+  for (const p of P.pills) { p.group ??= group; p.excludeIds ??= [...excludeIds]; }
+  delete P.group; delete P.excludeIds; delete P.splitPhaseId; delete P.halves; delete P.smallLabel; delete P.rows;
 }
 /** Drops a deleted event from the summary settings. */
 export function forgetEvent(d: State, id: string) {
@@ -245,7 +249,7 @@ export function forgetEvent(d: State, id: string) {
   d.config.summaryEventIds = drop(d.config.summaryEventIds)!;
   for (const t of d.summaryTotals) if (t.eventIds?.includes(id)) delete t.eventIds;
   const P = d.config.proctors;
-  if (P) { P.excludeIds = drop(P.excludeIds)!; P.pills.forEach((p) => p.lines.forEach((l) => { l.eventIds = drop(l.eventIds)!; })); }
+  P?.pills.forEach((p) => { p.excludeIds = drop(p.excludeIds)!; p.lines.forEach((l) => { l.eventIds = drop(l.eventIds)!; }); });
 }
 export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
   !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId

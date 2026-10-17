@@ -11,10 +11,11 @@ export type Subgroup = { name: string; eventIds: string[]; afterId?: string };
 export type ProctorLine = { label: string; eventIds: string[]; rooms?: 'listed' | 'others' };
 /** Where a pill's time range starts or ends: a phase's start or end, or a time in minutes. Missing = start / end of the day. */
 export type PillBound = { phaseId: string; edge: 'start' | 'end' } | { time: number };
-export type ProctorPill = { id: string; name: string; from?: PillBound; to?: PillBound; lines: ProctorLine[] };
-/** Proctor summary: rooms in use for `group` events (minus `excludeIds`), at the busiest slot of each pill's time range. */
+/** A proctor pill counts rooms in use for `group` events (minus `excludeIds`) at the busiest slot of its time range (whole day if none). */
+export type ProctorPill = { id: string; name: string; group: string; excludeIds: string[]; from?: PillBound; to?: PillBound; lines: ProctorLine[] };
+/** Proctor summary: one pill per entry in `pills`; min / ideal capacity types give proctors per room. */
 export type Proctors = {
-  group: string; excludeIds: string[]; minCap: string; idealCap: string; bigType: string; pills: ProctorPill[]; note?: string;
+  minCap: string; idealCap: string; bigType: string; pills: ProctorPill[]; note?: string;
 };
 /** Events in `eventIds` need `minutes` free before and after them in the same room. */
 export type Spacing = { eventIds: string[]; minutes: number; label: string };

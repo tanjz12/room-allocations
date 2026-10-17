@@ -3,7 +3,7 @@ import { Fragment } from 'react';
 import type { PillBound, ProctorPill, Proctors } from '../lib/config';
 import { ConfirmButton, type ViewProps } from './common';
 
-const newPill = (name: string): ProctorPill => ({ id: uid('pill'), name, lines: [{ label: '', eventIds: [] }] });
+const newPill = (name: string, group: string): ProctorPill => ({ id: uid('pill'), name, group, excludeIds: [], lines: [{ label: '', eventIds: [] }] });
 
 /** Chips for a list of event ids, with × to remove and a + select to add. */
 function EventChips({ state, ids, onChange, pool }: { state: State; ids: string[]; onChange: (ids: string[]) => void; pool?: string[] }) {
@@ -99,13 +99,9 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
       <p className="muted">Proctors needed at the busiest 15-minute slot: rooms in use for the chosen group's events, each counted once, with the min and ideal capacity types as the number of proctors per room.</p>
       <p><label><input type="checkbox" checked={!!P} onChange={(e) => update((d) => {
         if (!e.target.checked) { delete d.config.proctors; return; }
-        d.config.proctors = { group: groups[0] ?? '', excludeIds: [], minCap: '', idealCap: '', bigType: '', pills: [newPill('Proctors')] };
+        d.config.proctors = { minCap: '', idealCap: '', bigType: '', pills: [newPill('Proctors', groups[0] ?? '')] };
       })} /> Show proctors in the summary</label></p>
       {P && <table className="table proctor-settings"><tbody>
-        <tr><th>Event group</th><td><select value={P.group} onChange={(e) => setP((p) => { p.group = e.target.value; })}>
-          {[...new Set([P.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}</select></td></tr>
-        <tr><th>Leave out</th><td><EventChips state={state} ids={P.excludeIds} pool={state.events.filter((e) => e.group === P.group).map((e) => e.id)}
-          onChange={(ids) => setP((p) => { p.excludeIds = ids; })} /></td></tr>
         <tr><th>Proctors per room</th><td>min {capSelect(P.minCap, (v) => setP((p) => { p.minCap = v; }))}
           {' '}ideal {capSelect(P.idealCap, (v) => setP((p) => { p.idealCap = v; }))}</td></tr>
         <tr><th>Rooms listed one by one</th><td><select value={P.bigType} onChange={(e) => setP((p) => { p.bigType = e.target.value; })}>
@@ -118,6 +114,10 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
                 {' '}from {boundSelect(pill.from, 'from', (b) => setP((p) => { if (b) p.pills[pi].from = b; else delete p.pills[pi].from; }))}
                 {' '}to {boundSelect(pill.to, 'to', (b) => setP((p) => { if (b) p.pills[pi].to = b; else delete p.pills[pi].to; }))}
                 {' '}<ConfirmButton label="Delete pill" onConfirm={() => setP((p) => { p.pills.splice(pi, 1); })} /></div>
+              <div className="pill-line">counts <select value={pill.group} title="Event group this pill counts" onChange={(e) => setP((p) => { p.pills[pi].group = e.target.value; })}>
+                {[...new Set([pill.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}</select> events
+                {' '}leaving out <EventChips state={state} ids={pill.excludeIds} pool={state.events.filter((e) => e.group === pill.group).map((e) => e.id)}
+                  onChange={(ids) => setP((p) => { p.pills[pi].excludeIds = ids; })} /></div>
               {pill.lines.map((l, li) => (
                 <div key={li} className="pill-line">
                   <input value={l.label} placeholder="Line label" title="Line label (can be blank)" onChange={(e) => setP((p) => { p.pills[pi].lines[li].label = e.target.value; })} />
@@ -137,8 +137,8 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
               <button onClick={() => setP((p) => { p.pills[pi].lines.push({ label: '', eventIds: [] }); })}>+ Add line</button>
             </div>
           ))}
-          <button onClick={() => setP((p) => { p.pills.push(newPill(`Proctors ${p.pills.length + 1}`)); })}>+ Add pill</button>
-          <p className="muted small">Each pill shows min · ideal at the busiest slot in its time range, then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</p>
+          <button onClick={() => setP((p) => { p.pills.push(newPill(`Proctors ${p.pills.length + 1}`, p.pills.at(-1)?.group ?? groups[0] ?? '')); })}>+ Add pill</button>
+          <p className="muted small">Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</p>
         </td></tr>
         <tr><th>Note</th><td><textarea rows={2} value={P.note ?? ''} onChange={(e) => setP((p) => { if (e.target.value) p.note = e.target.value; else delete p.note; })} /></td></tr>
       </tbody></table>}
