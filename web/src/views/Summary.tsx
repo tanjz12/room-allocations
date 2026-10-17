@@ -69,12 +69,16 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
   );
   const picked = state.config.summaryEventIds.map((id) => rows.find((x) => x.e.id === id)).filter((x) => !!x);
   if (!state.summaryTotals.length && !picked.length && !P) return null;
+  const only = (x: (typeof state.summaryTotals)[number]) => {
+    const names = [...(x.eventGroups ?? []), ...(x.eventIds ?? []).map((id) => state.events.find((e) => e.id === id)?.name ?? id)];
+    return names.length ? ` with ${names.join(' / ')} scheduled` : '';
+  };
   const totalStat = (x: (typeof state.summaryTotals)[number]) => {
     const c = state.categories.find((y) => y.id === x.tagId);
     const ct = state.capTypes.find((y) => y.id === x.capType);
     const n = summaryTotalValue(state, x);
     return (
-      <div key={x.id} className="stat" title={`${ct?.name ?? x.capType} capacity of all rooms tagged ${c?.name ?? '?'}`}>
+      <div key={x.id} className="stat" title={`${ct?.name ?? x.capType} capacity of all rooms tagged ${c?.name ?? '?'}${only(x)}`}>
         <span>{c && <Swatch color={c.color} />}{x.label}</span><b>{n}</b>
       </div>
     );

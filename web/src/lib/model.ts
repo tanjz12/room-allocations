@@ -27,7 +27,8 @@ export const roomTags = (s: State, r: Room) => {
 /** `signName` overrides the event's sign label for this room only. */
 export type Block = { id: string; roomId: string; eventId: string; signName?: string };
 export type CapType = { id: string; name: string; formulas: Record<string, string> };
-export type SummaryTotal = { id: string; label: string; tagId: string; capType: string };
+/** `eventIds` / `eventGroups`: count only rooms with one of these events (or an event in one of these groups) scheduled. */
+export type SummaryTotal = { id: string; label: string; tagId: string; capType: string; eventIds?: string[]; eventGroups?: string[] };
 export type State = { rooms: Room[]; events: EventT[]; categories: Category[]; typeTags: Record<string, string[]>; mapColors: MapColors; blocks: Block[]; capTypes: CapType[]; phases: Phase[]; summaryTotals: SummaryTotal[]; projectedIndiv?: number; config: Config; version?: number };
 
 export const DAY_START = 7 * 60;
@@ -218,6 +219,9 @@ export function proctorHalves(state: State) {
     { label: P.halves[1], first: false, slots: SLOTS.filter((t) => t >= (split?.end ?? 720)) },
   ] : [{ label: '', first: false, slots: SLOTS }]).map((h) => ({ ...h, min: peak(h.slots, P.minCap), ideal: peak(h.slots, P.idealCap) }));
 }
+export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
+  !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId
+    && (x.eventIds?.includes(b.eventId) || !!x.eventGroups?.includes(state.events.find((e) => e.id === b.eventId)?.group ?? '\u0000')));
 export const summaryTotalValue = (state: State, x: SummaryTotal) =>
-  state.rooms.filter((r) => roomActive(r) && roomTags(state, r).some((y) => y.id === x.tagId))
+  state.rooms.filter((r) => roomActive(r) && roomTags(state, r).some((y) => y.id === x.tagId) && summaryRoomUsed(state, x, r.id))
     .reduce((t, r) => t + (roomCapacity(state, r, x.capType).value ?? 0), 0);
