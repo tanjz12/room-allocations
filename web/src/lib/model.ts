@@ -11,7 +11,7 @@ export type EventT = { id: string; name: string; color: string; start: number; e
 /** Links an event time to the start or end of a phase's external schedule. */
 export type TimeRef = { phaseId: string; edge: 'start' | 'end' };
 /** `times` holds each phase schedule's start/end by schedule key; older data keeps External in start/end and Internal in intStart/intEnd. */
-export type Phase = { id: string; name: string; color: string; start: number; end: number; intStart: number; intEnd: number; times?: Record<string, { start: number; end: number }> };
+export type Phase = { scheds?: string[]; id: string; name: string; color: string; start: number; end: number; intStart: number; intEnd: number; times?: Record<string, { start: number; end: number }> };
 export function phaseTimes(p: Phase, key: string): { start: number; end: number } {
   return p.times?.[key] ?? (key === 'int' ? { start: p.intStart, end: p.intEnd } : { start: p.start, end: p.end });
 }
@@ -80,6 +80,10 @@ export function groupedEvents(s: State, keepEmpty = false) {
       .sort((a, b) => rank(a) - rank(b) || a.start - b.start || a.name.localeCompare(b.name)),
   })).filter((x) => keepEmpty || x.events.length);
 }
+export const alignKey = (s: State) => s.config.alignSchedule ?? s.config.phaseSchedules?.[0]?.key ?? 'ext';
+/** Whether a phase shows in a schedule; phases without `scheds` show in all of them. */
+export const inSched = (p: Phase, key: string) => !p.scheds || p.scheds.includes(key);
+export const alignPhases = (s: State) => s.phases.filter((p) => inSched(p, alignKey(s)));
 /** Recomputes linked event times from the phases; links to deleted phases become fixed times. */
 export function applyPhaseRefs(s: State) {
   for (const e of s.events) {
@@ -87,7 +91,7 @@ export function applyPhaseRefs(s: State) {
       const ref = e[`${k}Ref`];
       if (!ref) continue;
       const p = s.phases.find((x) => x.id === ref.phaseId);
-      if (p) e[k] = phaseTimes(p, s.config.alignSchedule ?? s.config.phaseSchedules?.[0]?.key ?? 'ext')[ref.edge];
+      if (p) e[k] = phaseTimes(p, alignKey(s))[ref.edge];
       else e[`${k}Ref`] = null;
     }
   }
@@ -160,7 +164,8 @@ export function roomCapacity(s: State, room: Room, capId: string, seen: string[]
   }
 }
 
-export const eventAt = (e: EventT, t: number) => e.start <= t && t < e.end;
+/** Whether an event overlaps the 15-minute slot starting at `t`. */
+export const eventAt = (e: EventT, t: number) => e.start < t + SLOT && t < e.end;
 
 /** Events in an active room at time `t`; with `t` null, all of its events for the day in time order. */
 export function roomEventsAt(s: State, roomId: string, t: number | null): EventT[] {
@@ -220,7 +225,10 @@ export function highlightTotals(state: State) {
 }
 export const proctorLabel = (half: string) => (half ? `${half} proctors` : 'Proctors');
 /** Events of `group` starting inside the phase: the ones a proctors summary row counts. */
-export const phaseEvents = (s: State, ph: Phase, group: string) => s.events.filter((e) => e.group === group && ph.start <= e.start && e.start < ph.end);
+export const phaseEvents = (s: State, ph: Phase, group: string) => {
+  const t = phaseTimes(ph, alignKey(s));
+  return s.events.filter((e) => e.group === group && t.start <= e.start && e.start < t.end);
+};
 export const typeMatches = (r: Room, t: string) => r.type === t || baseType(r.type) === t;
 const capSum = (s: State, rooms: Room[], capId: string | undefined) =>
   capId ? Math.round(rooms.reduce((n, r) => n + (roomCapacity(s, r, capId).value ?? 0), 0) * 100) / 100 : 0;
@@ -229,7 +237,9 @@ export function summaryValue(s: State, x: SummaryRow): { n: number; pills?: numb
   const active = s.rooms.filter(roomActive);
   const used = (ids: Set<string>) => { const u = new Set(s.blocks.filter((b) => ids.has(b.eventId)).map((b) => b.roomId)); return active.filter((r) => u.has(r.id)); };
   if (x.kind === 'cap') {
-    const rooms = active.filter((r) => x.types.some((t) => typeMatches(r, t)));
+    const tagged = (r: Room) => { const ids = new Set(roomTags(s, r).map((c) => c.id)); return (x.tags ?? []).some((t) => ids.has(t)); };
+    const usedFor = (r: Room) => !x.group || s.blocks.some((b) => b.roomId === r.id && s.events.find((e) => e.id === b.eventId)?.group === x.group);
+    const rooms = active.filter((r) => (x.types.some((t) => typeMatches(r, t)) || tagged(r)) && usedFor(r));
     return { n: capSum(s, rooms, x.capType), rooms };
   }
   if (x.kind === 'event') {
@@ -245,8 +255,8 @@ export function summaryValue(s: State, x: SummaryRow): { n: number; pills?: numb
 function migrateSummary(out: State) {
   const cfg = out.config;
   if (!cfg.summary?.length && (out.summaryTotals.length || cfg.summaryEventIds?.length || cfg.proctors)) {
-    const rows: SummaryRow[] = out.summaryTotals.map((t) => ({ id: t.id, kind: 'cap', label: `${t.label} Capacity`, capType: t.capType,
-      types: Object.keys(out.typeTags).filter((ty) => out.typeTags[ty].includes(t.tagId)) }));
+    const rows: SummaryRow[] = out.summaryTotals.map((t) => ({ id: t.id, kind: 'cap', label: t.label, capType: t.capType,
+      types: [], tags: [t.tagId], group: t.eventGroups?.[0] }));
     for (const id of cfg.summaryEventIds ?? []) {
       const e = out.events.find((x) => x.id === id);
       if (e) rows.push({ id: uid('sum'), kind: 'event', label: e.name, eventId: id });
@@ -256,7 +266,7 @@ function migrateSummary(out: State) {
       cfg.proctorCaps = { pills: [{ capType: P.minCap, name: 'min' }, { capType: P.idealCap, name: 'ideal' }], listed: (P.listed ?? []).filter((m) => m.field === 'type').map((m) => m.value) };
       for (const g of new Set(P.pills.map((p) => p.group))) {
         const skip = P.pills.filter((p) => p.group === g).flatMap((p) => p.excludeIds);
-        for (const ph of out.phases) if (phaseEvents(out, ph, g).some((e) => !skip.includes(e.id)))
+        for (const ph of alignPhases(out)) if (phaseEvents(out, ph, g).some((e) => !skip.includes(e.id)))
           rows.push({ id: uid('sum'), kind: 'proctors', label: `${ph.name} proctors`, phaseIds: [ph.id], group: g });
       }
     }

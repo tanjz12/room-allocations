@@ -1,7 +1,7 @@
-import { uid, type State } from '../lib/model';
+import { uid, type State, alignPhases } from '../lib/model';
 import { useState } from 'react';
 import type { ProctorCapPill, SummaryRow } from '../lib/config';
-import { ConfirmButton, type ViewProps } from './common';
+import { ConfirmButton, Swatch, type ViewProps } from './common';
 
 type Suggestion = { key: string; label: string; hint?: string };
 
@@ -72,18 +72,31 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
   );
   const detail = (x: SummaryRow) => {
     if (x.kind === 'cap') {
-      const free = types.filter((t) => !x.types.includes(t));
+      const tags = x.tags ?? [];
+      const setCap = (f: (y: Extract<SummaryRow, { kind: 'cap' }>) => void) => set(x.id, (y) => { if (y.kind === 'cap') f(y); });
+      const freeTags = state.categories.filter((c) => !tags.includes(c.id));
+      const freeTypes = types.filter((t) => !x.types.includes(t));
+      const groups = [...new Set(state.events.map((e) => e.group).filter(Boolean))];
       return <>
-        {capSelect(x.capType, (v) => set(x.id, (y) => { if (y.kind === 'cap') y.capType = v; }), 'Capacity type')} of every room of type{' '}
+        {capSelect(x.capType, (v) => setCap((y) => { y.capType = v; }), 'Capacity type')} of every room with{' '}
         <span className="tags-cell">
+          {tags.map((id) => { const c = state.categories.find((z) => z.id === id); return (
+            <span key={id} className="chip tag-chip" title="Tag">{c && <Swatch color={c.color} />}{c?.name ?? '—'}
+              <button className="chip-x" title="Remove tag" onClick={() => setCap((y) => { y.tags = (y.tags ?? []).filter((z) => z !== id); })}>×</button></span>
+          ); })}
           {x.types.map((t) => (
-            <span key={t} className="chip tag-chip">{t}
-              <button className="chip-x" title={`Remove ${t}`} onClick={() => set(x.id, (y) => { if (y.kind === 'cap') y.types = y.types.filter((z) => z !== t); })}>×</button></span>
+            <span key={t} className="chip tag-chip" title="Room type">type {t}
+              <button className="chip-x" title={`Remove ${t}`} onClick={() => setCap((y) => { y.types = y.types.filter((z) => z !== t); })}>×</button></span>
           ))}
-          {free.length > 0 && <select value="" aria-label="Add room type" onChange={(e) => { const v = e.target.value; if (v) set(x.id, (y) => { if (y.kind === 'cap') y.types.push(v); }); }}>
-            <option value="">+ type</option>{free.map((t) => <option key={t} value={t}>{t}</option>)}
+          {(freeTags.length > 0 || freeTypes.length > 0) && <select value="" aria-label="Add tag or room type" onChange={(e) => { const v = e.target.value; if (v.startsWith('c:')) setCap((y) => { y.tags = [...(y.tags ?? []), v.slice(2)]; }); else if (v.startsWith('t:')) setCap((y) => { y.types.push(v.slice(2)); }); }}>
+            <option value="">+ tag / type</option>
+            {freeTags.length > 0 && <optgroup label="Tags">{freeTags.map((c) => <option key={c.id} value={`c:${c.id}`}>{c.name}</option>)}</optgroup>}
+            {freeTypes.length > 0 && <optgroup label="Room types">{freeTypes.map((t) => <option key={t} value={`t:${t}`}>{t}</option>)}</optgroup>}
           </select>}
         </span>
+        {' '}used for <select value={x.group ?? ''} aria-label="Used for" onChange={(e) => { const v = e.target.value; setCap((y) => { if (v) y.group = v; else delete y.group; }); }}>
+          <option value="">anything</option>{groups.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
       </>;
     }
     if (x.kind === 'event') return <>
@@ -102,8 +115,8 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
           <span key={id} className="chip tag-chip">{state.phases.find((p) => p.id === id)?.name ?? '—'}
             <button className="chip-x" title="Remove phase" onClick={() => setPhases(x.id, x.phaseIds.filter((z) => z !== id))}>×</button></span>
         ))}
-        {state.phases.some((p) => !x.phaseIds.includes(p.id)) && <select value="" aria-label="Add phase" onChange={(e) => { const v = e.target.value; if (v) setPhases(x.id, [...x.phaseIds, v]); }}>
-          <option value="">+ phase</option>{state.phases.filter((p) => !x.phaseIds.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        {alignPhases(state).some((p) => !x.phaseIds.includes(p.id)) && <select value="" aria-label="Add phase" onChange={(e) => { const v = e.target.value; if (v) setPhases(x.id, [...x.phaseIds, v]); }}>
+          <option value="">+ phase</option>{alignPhases(state).filter((p) => !x.phaseIds.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>}
       </span>{x.phaseIds.length > 1 && ' (largest phase)'}
     </>;
@@ -133,7 +146,7 @@ export default function SummarySettings({ state, update }: Pick<ViewProps, 'stat
       <p>
         <button disabled={!types.length} onClick={() => add({ id: uid('sum'), kind: 'cap', label: 'New total', capType: 'base', types: [] })}>+ Capacity total</button>{' '}
         <button disabled={!state.events.length} onClick={() => add({ id: uid('sum'), kind: 'event', label: state.events[0].name, eventId: state.events[0].id })}>+ Event total</button>{' '}
-        <button disabled={!state.phases.length} onClick={() => add({ id: uid('sum'), kind: 'proctors', label: phaseLabel([state.phases[0].id]), phaseIds: [state.phases[0].id], group: lastGroup })}>+ Proctors</button>
+        <button disabled={!alignPhases(state).length} onClick={() => add({ id: uid('sum'), kind: 'proctors', label: phaseLabel([alignPhases(state)[0].id]), phaseIds: [alignPhases(state)[0].id], group: lastGroup })}>+ Proctors</button>
       </p>
       {rows.some((x) => x.kind === 'proctors') && <p>Proctors per room:{' '}
         <span className="tags-cell">

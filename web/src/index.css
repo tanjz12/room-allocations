@@ -87,9 +87,9 @@ main { container-type: size; }
 .ptl-row, .ptl-axis { display: flex; align-items: stretch; margin-top: 4px; }
 .ptl-label { width: var(--ptl-label, 90px); flex: none; font-size: 12px; display: flex; align-items: center; gap: 10px; padding-right: 8px; box-sizing: border-box; }
 .ptl-name { flex: 1; font-weight: 600; display: flex; align-items: center; min-width: 0; }
-.ptl-name input { width: 100%; min-width: 0; }
+.ptl-name input { width: 100%; min-width: 0; font-size: 12px; padding: 2px 4px; }
 .ptl-align {
-  width: 110px;
+  width: 52px;
   flex: none;
   display: flex;
   align-items: center;
@@ -103,6 +103,10 @@ main { container-type: size; }
 .ptl-axis .ptl-align { align-self: flex-end; }
 .ptl-add { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
 .ptl-block { cursor: pointer; }
+.ptl-row { cursor: pointer; }
+.ptl-row.sel { cursor: default; }
+.ptl-row.sel .ptl-track { background: #eef5fc; cursor: copy; }
+.ptl-row:not(.sel) .ptl-block { cursor: inherit; }
 .ptl-h { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; touch-action: none; }
 .ptl-h:hover { background: rgba(0,0,0,.18); }
 .ptl-h-start { left: 0; }
@@ -168,6 +172,7 @@ header .confirm-in { width: 100px; }
 .room-edit .small { font-size: 11px; }
 .room-edit-warn { background: #fdecea; color: #a61b1b; border: 1px solid #f3b4ae; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
 .summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.summary-group { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .stat { display: flex; flex-direction: column; gap: 2px; border: 1px solid #d6dde3; border-radius: 6px; padding: 6px 10px; min-width: 96px; background: #fff; cursor: pointer; }
 .stat > span:first-child { font-size: 12px; color: #555; white-space: nowrap; }
 .stat b { font-size: 20px; }
@@ -412,3 +417,5 @@ button.font-item.on { background: #e3f1ef; }
 .upload-section { text-align: left; }
 select.status-sel { border-radius: 10px; border: none; padding: 2px 6px; font-weight: 500; }
 .ctl-toggles { display: flex; gap: 24px; margin: 18px 0 8px; font-size: 1.15em; }
+.fit-w { width: fit-content; max-width: 100%; }
+.time-in { font: inherit; font-size: 13px; padding: 2px 4px; }

@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import type { PhaseSchedule as Sched } from '../lib/config';
-import { DAY_END, DAY_START, applyPhaseRefs, fmtTime, phaseTimes, textColor, uid, type Phase } from '../lib/model';
+import { DAY_END, DAY_START, applyPhaseRefs, fmtTime, phaseTimes, textColor, uid, type Phase, type State, inSched } from '../lib/model';
 import { TimeSelect, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
@@ -17,45 +17,54 @@ function withTime(p: Phase, key: string, edge: Edge, t: number): Phase {
   const next = edge === 'start'
     ? { start: t, end: Math.min(DAY_END, Math.max(t + 15, t + cur.end - cur.start)) }
     : { end: t, start: Math.min(cur.start, t - 15) };
+  return withTimes(p, key, next);
+}
+function withTimes(p: Phase, key: string, next: { start: number; end: number }): Phase {
   const legacy = key === 'ext' ? { start: next.start, end: next.end } : key === 'int' ? { intStart: next.start, intEnd: next.end } : {};
   return { ...p, ...legacy, times: { ...p.times, [key]: next } };
 }
 
 export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state' | 'update'>) {
-  const [draft, setDraft] = useState<{ phases: Phase[]; scheds: Sched[]; align?: string } | null>(null);
+  const [editKey, setEditKey] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [pop, setPop] = useState<{ id: string; key: string } | null>(null);
-  const phases = draft?.phases ?? state.phases;
-  const sched = draft?.scheds ?? state.config.phaseSchedules ?? [];
-  const align = (draft ? draft.align : state.config.alignSchedule) ?? sched[0]?.key;
+  const [pop, setPop] = useState<string | null>(null);
+  const sched = state.config.phaseSchedules ?? [];
+  const align = state.config.alignSchedule ?? sched[0]?.key;
 
-  const setTime = (id: string, key: string, edge: Edge, t: number) => {
-    if (draft) setDraft({ ...draft, phases: draft.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)) });
-    else update((d) => { d.phases = d.phases.map((p) => (p.id === id ? withTime(p, key, edge, t) : p)); applyPhaseRefs(d); });
-  };
-  const setPhase = (id: string, patch: Partial<Phase>) => setDraft((d) => d && { ...d, phases: d.phases.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-  const setScheds = (scheds: Sched[]) => {
-    if (draft) return setDraft({ ...draft, scheds });
-    update((d) => {
-      d.config.phaseSchedules = scheds;
-      if (!scheds.some((x) => x.key === d.config.alignSchedule)) d.config.alignSchedule = scheds[0]?.key;
-      applyPhaseRefs(d);
-    });
-  };
-  const save = () => {
-    update((d) => {
-      d.phases = draft!.phases;
-      d.config.phaseSchedules = draft!.scheds;
-      d.config.alignSchedule = draft!.scheds.some((x) => x.key === draft!.align) ? draft!.align : draft!.scheds[0]?.key;
-      applyPhaseRefs(d);
-    });
-    setDraft(null);
+  const edit = (f: (d: State) => void) => update((d) => { f(d); applyPhaseRefs(d); });
+  const setPhase = (id: string, f: (p: Phase) => Phase) => edit((d) => { d.phases = d.phases.map((p) => (p.id === id ? f(p) : p)); });
+  const setScheds = (scheds: Sched[]) => edit((d) => {
+    d.config.phaseSchedules = scheds;
+    if (!scheds.some((x) => x.key === d.config.alignSchedule)) d.config.alignSchedule = scheds[0]?.key;
+  });
+  const shared = (p: Phase) => sched.every((y) => inSched(p, y.key));
+  const setShared = (p: Phase, from: string, on: boolean) => setPhase(p.id, (q) => {
+    if (!on) return { ...q, scheds: [from] };
+    const t = phaseTimes(q, from);
+    const r = sched.reduce((x, y) => (x.times?.[y.key] ? x : withTimes(x, y.key, t)), q);
+    return { ...r, scheds: undefined };
+  });
+  const remove = (p: Phase, key: string) => {
+    setPop(null);
+    const rest = sched.filter((y) => y.key !== key && inSched(p, y.key));
+    if (rest.length) setPhase(p.id, (q) => ({ ...q, scheds: rest.map((y) => y.key) }));
+    else edit((d) => { d.phases = d.phases.filter((q) => q.id !== p.id); });
   };
 
-  const timeAt = (e: RPointerEvent, track: Element) => {
+  const timeAt = (e: { clientX: number }, track: Element, round = Math.round) => {
     const r = track.getBoundingClientRect();
     const t = DAY_START + ((e.clientX - r.left) / r.width) * (DAY_END - DAY_START);
-    return Math.min(DAY_END, Math.max(DAY_START, Math.round(t / 15) * 15));
+    return Math.min(DAY_END, Math.max(DAY_START, round(t / 15) * 15));
+  };
+  const addAt = (key: string, t: number) => {
+    const next = Math.min(DAY_END, ...state.phases.filter((p) => inSched(p, key)).map((p) => phaseTimes(p, key).start).filter((s) => s > t));
+    const end = Math.min(next, t + 60);
+    if (end - t < 15) return;
+    const id = uid('p');
+    edit((d) => {
+      d.phases.push({ id, name: 'New phase', color: defaultColor(state, d.phases.map((p) => p.color)), start: t, end, intStart: t, intEnd: end, times: { [key]: { start: t, end } }, scheds: [key] });
+    });
+    setPop(id);
   };
   const startDrag = (e: RPointerEvent<HTMLElement>, id: string, key: string, edge: Edge, t: number) => {
     e.stopPropagation();
@@ -70,108 +79,93 @@ export default function PhaseSchedule({ state, update }: Pick<ViewProps, 'state'
     if (track) setDrag({ ...drag, t: timeAt(e, track) });
   };
   const endDrag = () => {
-    if (drag) setTime(drag.id, drag.key, drag.edge, drag.t);
+    if (drag) setPhase(drag.id, (p) => withTime(p, drag.key, drag.edge, drag.t));
     setDrag(null);
   };
+  const select = (key: string) => { if (editKey !== key) { setEditKey(key); setPop(null); } };
 
   return (
-    <div className="ptl" style={{ '--ptl-label': draft ? '190px' : `calc(${Math.max(4, ...sched.map((x) => x.name.length))}ch + 12px)` } as CSSProperties}>
+    <div className="ptl" style={{ '--ptl-label': `calc(${Math.max(4, ...sched.map((x) => x.name.length))}ch + ${editKey ? 44 : 12}px)` } as CSSProperties}>
       <div className="ptl-head">
         <h3>Tournament schedule</h3>
-        {draft ? (
-          <>
-            <button className="primary" onClick={save}>Save</button>
-            <button onClick={() => setDraft(null)}>Cancel</button>
-          </>
-        ) : <button onClick={() => { setPop(null); setDraft({ phases: structuredClone(state.phases), scheds: structuredClone(sched), align }); }}>Edit</button>}
+        {editKey ? <button onClick={() => { setEditKey(null); setPop(null); }}>Done</button>
+          : sched.length > 0 && <span className="muted">Click a row to edit its phases.</span>}
       </div>
       {sched.length > 0 && (
         <div className="ptl-axis">
           <div className="ptl-label" />
           <div className="ptl-track">{HOURS.map((t) => <span key={t} style={{ left: pct(t) }}>{fmtTime(t).replace(':00', '')}</span>)}</div>
-          <div className="ptl-align" title="Event start/end times linked to a phase follow the selected schedule">Align event blocks to</div>
+          <div className="ptl-align" title="Event start/end times linked to a phase follow the selected schedule">Align<br />events</div>
         </div>
       )}
-      {sched.map((s) => (
-        <div key={s.key} className="ptl-row">
-          <div className="ptl-label">
-            <span className="ptl-name">
-              {draft ? (
-                <>
-                  <input value={s.name} aria-label="Schedule name" onChange={(e) => setScheds(sched.map((x) => (x.key === s.key ? { ...x, name: e.target.value } : x)))} />
-                  <button className="chip-x" title={`Remove the ${s.name} schedule`} onClick={() => setScheds(sched.filter((x) => x.key !== s.key))}>×</button>
-                </>
-              ) : s.name}
-            </span>
+      {sched.map((s) => {
+        const on = editKey === s.key;
+        return (
+          <div key={s.key} className={on ? 'ptl-row sel' : 'ptl-row'} onClick={() => select(s.key)}
+            title={on ? undefined : `Click to edit the ${s.name} phases`}>
+            <div className="ptl-label">
+              <span className="ptl-name">
+                {on ? (
+                  <>
+                    <input value={s.name} aria-label="Schedule name" onChange={(e) => setScheds(sched.map((x) => (x.key === s.key ? { ...x, name: e.target.value } : x)))} />
+                    <button className="chip-x" title={`Remove the ${s.name} schedule`} onClick={(e) => { e.stopPropagation(); setEditKey(null); setScheds(sched.filter((x) => x.key !== s.key)); }}>×</button>
+                  </>
+                ) : s.name}
+              </span>
+            </div>
+            <div className="ptl-track" title={on ? 'Click an empty spot to add a phase' : undefined}
+              onClick={(e) => { if (on && e.target === e.currentTarget) { setPop(null); addAt(s.key, timeAt(e, e.currentTarget, Math.floor)); } }}>
+              {state.phases.filter((p) => inSched(p, s.key)).map((p) => {
+                let { start, end } = phaseTimes(p, s.key);
+                if (drag && drag.id === p.id && drag.key === s.key) ({ start, end } = phaseTimes(withTime(p, s.key, drag.edge, drag.t), s.key));
+                const open = on && pop === p.id;
+                return [
+                  <div key={p.id} className="ptl-block" style={{ left: pct(start), width: `calc(${pct(end)} - ${pct(start)})`, background: p.color, color: textColor(p.color) }}
+                    title={`${p.name}\n${fmtTime(start)}–${fmtTime(end)}${on ? '\nClick to edit; drag the left edge to move, the right edge to resize' : ''}`}
+                    onClick={(e) => { if (on) { e.stopPropagation(); setPop(open ? null : p.id); } }}>
+                    <b>{p.name}</b><small>{fmtTime(start)}–{fmtTime(end)}</small>
+                    {on && (['start', 'end'] as const).map((edge) => (
+                      <span key={edge} className={`ptl-h ptl-h-${edge}`} title={edge === 'start' ? 'Drag to move the phase' : 'Drag to change the end time'}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => startDrag(e, p.id, s.key, edge, edge === 'start' ? start : end)}
+                        onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)} />
+                    ))}
+                  </div>,
+                  open && (
+                    <div key={`${p.id}-pop`} className="ptl-pop" style={start - DAY_START > (DAY_END - DAY_START) / 2 ? { right: `calc(100% - ${pct(end)})` } : { left: pct(start) }} onClick={(e) => e.stopPropagation()}>
+                      <ColorPicker value={p.color} existing={usedColors(state)} onChange={(c) => setPhase(p.id, (q) => ({ ...q, color: c }))} />
+                      <input value={p.name} aria-label="Phase name" size={Math.max(8, p.name.length)} onChange={(e) => setPhase(p.id, (q) => ({ ...q, name: e.target.value }))} />
+                      <label>Start <TimeSelect value={start} onChange={(v) => setPhase(p.id, (q) => withTime(q, s.key, 'start', v))} /></label>
+                      <label>End <TimeSelect includeEnd value={end} onChange={(v) => setPhase(p.id, (q) => withTime(q, s.key, 'end', v))} /></label>
+                      {sched.length > 1 && (
+                        <label title="Show this phase in every schedule, each with its own times">
+                          <input type="checkbox" checked={shared(p)} onChange={(e) => setShared(p, s.key, e.target.checked)} /> shared
+                        </label>
+                      )}
+                      <button className="danger" title={sched.some((y) => y.key !== s.key && inSched(p, y.key)) ? `Remove from ${s.name} only` : 'Delete this phase'} onClick={() => remove(p, s.key)}>Delete</button>
+                      <button onClick={() => setPop(null)}>Done</button>
+                    </div>
+                  ),
+                ];
+              })}
+            </div>
+            <div className="ptl-align" onClick={(e) => e.stopPropagation()}>
+              <input type="radio" name="align-sched" checked={align === s.key}
+                aria-label={`Align event blocks to ${s.name}`}
+                title={`Event start/end times linked to a phase follow ${s.name}`}
+                onChange={() => edit((d) => { d.config.alignSchedule = s.key; })} />
+            </div>
           </div>
-          <div className="ptl-track">
-            {phases.map((p) => {
-              let { start, end } = phaseTimes(p, s.key);
-              if (drag && drag.id === p.id && drag.key === s.key) ({ start, end } = phaseTimes(withTime(p, s.key, drag.edge, drag.t), s.key));
-              const open = pop?.id === p.id && pop.key === s.key;
-              return [
-                <div key={p.id} className="ptl-block" style={{ left: pct(start), width: `calc(${pct(end)} - ${pct(start)})`, background: p.color, color: textColor(p.color) }}
-                  title={`${p.name}\n${fmtTime(start)}–${fmtTime(end)}\nClick to edit times; drag the left edge to move, the right edge to resize`}
-                  onClick={() => setPop(open ? null : { id: p.id, key: s.key })}>
-                  <b>{p.name}</b><small>{fmtTime(start)}–{fmtTime(end)}</small>
-                  {(['start', 'end'] as const).map((edge) => (
-                    <span key={edge} className={`ptl-h ptl-h-${edge}`} title={edge === 'start' ? 'Drag to move the phase' : 'Drag to change the end time'}
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => startDrag(e, p.id, s.key, edge, edge === 'start' ? start : end)}
-                      onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)} />
-                  ))}
-                </div>,
-                open && (
-                  <div key={`${p.id}-pop`} className="ptl-pop" style={{ left: pct(start) }}>
-                    <b>{p.name}</b> ({s.name})
-                    <label>Start <TimeSelect value={start} onChange={(v) => setTime(p.id, s.key, 'start', v)} /></label>
-                    <label>End <TimeSelect includeEnd value={end} onChange={(v) => setTime(p.id, s.key, 'end', v)} /></label>
-                    <button onClick={() => setPop(null)}>Done</button>
-                  </div>
-                ),
-              ];
-            })}
-          </div>
-          <div className="ptl-align">
-            <input type="radio" name="align-sched" checked={align === s.key} disabled={!draft}
-              aria-label={`Align event blocks to ${s.name}`}
-              title={draft ? `Event start/end times linked to a phase follow ${s.name}` : 'Click Edit to change which schedule event blocks align to'}
-              onChange={() => setDraft((d) => d && { ...d, align: s.key })} />
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <div className="ptl-add">
         <button onClick={() => {
           const key = uid('s');
-          const scheds = [...sched, { key, name: `Schedule ${sched.length + 1}` }];
-          if (draft) setDraft({ ...draft, scheds, align: draft.scheds.some((x) => x.key === draft.align) ? draft.align : key });
-          else setScheds(scheds);
+          setScheds([...sched, { key, name: `Schedule ${sched.length + 1}` }]);
+          setEditKey(key);
         }}>+ Add schedule</button>
         {!sched.length && <span className="muted">No schedules yet. Each one adds a phase column to the Schedule page.</span>}
       </div>
-      {draft && (
-        <>
-          <table className="table">
-            <thead><tr><th>Color</th><th>Phase</th><th>Linked events</th><th></th></tr></thead>
-            <tbody>
-              {draft.phases.map((p) => (
-                <tr key={p.id}>
-                  <td><ColorPicker value={p.color} existing={usedColors(state)} onChange={(x) => setPhase(p.id, { color: x })} /></td>
-                  <td><input value={p.name} onChange={(x) => setPhase(p.id, { name: x.target.value })} /></td>
-                  <td className="muted">{state.events.filter((e) => e.startRef?.phaseId === p.id || e.endRef?.phaseId === p.id).map((e) => e.name).join(', ')}</td>
-                  <td><button className="danger" onClick={() => setDraft({ ...draft, phases: draft.phases.filter((x) => x.id !== p.id) })}>Delete</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={() => {
-            const start = Math.min(DAY_END - 15, Math.max(DAY_START + 60, ...draft.phases.map((p) => phaseTimes(p, align ?? 'ext').end)));
-            const end = Math.min(DAY_END, start + 60);
-            const times = Object.fromEntries(sched.map((x) => [x.key, { start, end }]));
-            setDraft({ ...draft, phases: [...draft.phases, { id: uid('p'), name: 'New phase', color: defaultColor(state, draft.phases.map((p) => p.color)), start, end, intStart: start, intEnd: end, times }] });
-          }}>+ Add phase</button>
-        </>
-      )}
     </div>
   );
 }

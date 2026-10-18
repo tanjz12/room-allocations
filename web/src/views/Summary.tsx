@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { baseType, fmtTime, phaseEvents, roomCapacity, summaryValue, typeMatches, type Room } from '../lib/model';
+import { baseType, fmtTime, phaseEvents, roomCapacity, summaryValue, typeMatches, type Room, phaseTimes, alignKey } from '../lib/model';
 import type { SummaryRow } from '../lib/config';
 import { Swatch, type ViewProps } from './common';
 import SummarySettings from './SummarySettings';
@@ -49,16 +49,16 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
     if (x.kind === 'cap') {
       const ct = state.capTypes.find((y) => y.id === x.capType);
       return (
-        <div key={x.id} className="stat" title={`${ct?.name ?? x.capType} of every ${x.types.join(' / ') || '—'} room: ${rooms}`}>
-          <span>{x.label}</span><b>{v.n}</b>
+        <div key={x.id} className="stat" title={`${ct?.name ?? x.capType} of every ${[...(x.tags ?? []).map((id) => state.categories.find((c) => c.id === id)?.name ?? id), ...x.types].join(' / ') || '—'} room${x.group ? ` used for ${x.group}` : ''}: ${rooms}`}>
+          <span>{(() => { const c = (x.tags ?? []).map((id) => state.categories.find((z) => z.id === id)).find((z) => z); return c && <Swatch color={c.color} />; })()}{x.label.replace(/\s*\bcapacity\b/i, '')}</span><b>{v.n}</b>
         </div>
       );
     }
     const phs = v.phases ?? [];
     const evs = (ph: (typeof phs)[number]['ph']) => [...new Set(phaseEvents(state, ph, x.group).map((e) => e.name))].join(', ') || 'none';
     return (
-      <div key={x.id} className="stat proctors" onClick={() => phs[0] && setTime(phs[0].ph.start)}
-        title={`Rooms with a ${x.group || '—'} event starting in ${phs.map((q) => `${q.ph.name} (${fmtTime(q.ph.start)}–${fmtTime(q.ph.end)}: ${evs(q.ph)})`).join(', ') || '?'}${phs.length > 1 ? '; each number is the largest phase' : ''}`}>
+      <div key={x.id} className="stat proctors" onClick={() => phs[0] && setTime(phaseTimes(phs[0].ph, alignKey(state)).start)}
+        title={`Rooms with a ${x.group || '—'} event starting in ${phs.map((q) => `${q.ph.name} (${fmtTime(phaseTimes(q.ph, alignKey(state)).start)}–${fmtTime(phaseTimes(q.ph, alignKey(state)).end)}: ${evs(q.ph)})`).join(', ') || '?'}${phs.length > 1 ? '; each number is the largest phase' : ''}`}>
         <span>{x.label}</span>
         <b>{pills.map((p, i) => <Fragment key={i}>{i ? ' · ' : ''}{v.pills?.[i] ?? 0} <small>{p.name}</small></Fragment>)}</b>
         {phs.map((q) => q.rooms.length > 0 && <span key={q.ph.id} className="muted small">{phs.length > 1 && <>{q.ph.name}: </>}{breakdown(q.rooms)}</span>)}
@@ -68,7 +68,7 @@ export default function Summary({ state, update, setTime }: Pick<ViewProps, 'sta
 
   return (
     <div className="summary-block">
-      {rows.length > 0 && <><h2>Summary</h2><div className="summary">{rows.map(stat)}</div></>}
+      {rows.length > 0 && <><h2>Summary</h2><div className="summary">{[rows.filter((x) => x.kind !== 'proctors'), rows.filter((x) => x.kind === 'proctors')].filter((g) => g.length).map((g, i) => <div key={i} className="summary-group">{g.map(stat)}</div>)}</div></>}
       <details className="summary-edit">
         <summary>Edit summary</summary>
         <SummarySettings state={state} update={update} />

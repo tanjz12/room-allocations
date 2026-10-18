@@ -1,6 +1,6 @@
 import type { PhaseSchedule } from '../lib/config';
 import { useMemo, useState } from 'react';
-import { phaseTimes, DAY_START, SLOT, SLOTS, clashMessage, clashWith, fmtTime, groupedEvents, roomActive, roomCapacity, textColor, uid } from '../lib/model';
+import { phaseTimes, DAY_START, SLOT, SLOTS, clashMessage, clashWith, fmtTime, groupedEvents, roomActive, roomCapacity, textColor, uid, inSched } from '../lib/model';
 import { Swatch, type ViewProps } from './common';
 import Summary from './Summary';
 
@@ -79,7 +79,7 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
           {phaseCols(state.config.phaseSchedules).map(([label, key], i) => (
             <div key={key} className="col phase-col" style={{ height: SLOTS.length * ROW, left: 70 + i * 78 }}>
               <div className="now" style={{ top: ((time - DAY_START) / SLOT) * ROW, height: ROW }} />
-              {state.phases.map((p) => {
+              {state.phases.filter((p) => inSched(p, key)).map((p) => {
                 const { start: s0, end: e0 } = phaseTimes(p, key);
                 return (
                   <div key={p.id} className="block"

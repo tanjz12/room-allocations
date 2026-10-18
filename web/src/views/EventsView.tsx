@@ -41,7 +41,8 @@ export default function EventsView({ state, update }: ViewProps) {
     <div className="page">
       <section>
         <h2>Events</h2>
-        <p className="muted">Start/end can be a fixed time or the start/end of a phase. Linked times follow the phase's external schedule and update when the phase is saved.</p>
+        <p className="muted">Start/end can be a fixed time or the start/end of a phase. Linked times follow the phase's times in the schedule picked under Align events.</p>
+        <div className="fit-w">
         <table className="table">
           <thead><tr><th>Color</th><th>Name</th><th>Sign name</th><th title="Leave off room signs">Hide on signs</th><th title="List first on room signs">List first</th><th>Start</th><th>End</th><th>Capacity type</th><th></th></tr></thead>
           {groupedEvents(state, true).map(({ group, events }) => {
@@ -68,6 +69,7 @@ export default function EventsView({ state, update }: ViewProps) {
           })}
         </table>
         <PhaseSchedule state={state} update={update} />
+        </div>
       </section>
     </div>
   );

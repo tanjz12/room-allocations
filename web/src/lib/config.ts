@@ -24,7 +24,7 @@ export type ProctorPill = { id: string; name: string; group: string; excludeIds:
 /** One number on a proctors card: a capacity type added up over the rooms, shown with `name` after it (e.g. "min"). */
 export type ProctorCapPill = { capType: string; name: string };
 export type SummaryRow =
-  | { id: string; kind: 'cap'; label: string; capType: string; types: string[] }
+  | { id: string; kind: 'cap'; label: string; capType: string; types: string[]; tags?: string[]; group?: string }
   | { id: string; kind: 'event'; label: string; eventId: string }
   | { id: string; kind: 'proctors'; label: string; phaseIds: string[]; group: string };
 export type RoomMatch = { field: 'type' | 'building' | 'status' | 'room'; value: string };

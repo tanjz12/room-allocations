@@ -1,4 +1,4 @@
-import { phaseTimes, DAY_END, DAY_START, SLOT, fmtTime, RAW_NAME, roomActive, roomCapacity, summaryValue, textColor, type Room, type State } from './model';
+import { phaseTimes, DAY_END, DAY_START, SLOT, fmtTime, RAW_NAME, roomActive, roomCapacity, summaryValue, textColor, type Room, type State, inSched } from './model';
 import { toSheetFormula } from './formula';
 import { PACKAGE_FORMAT, makePackage, packageText, readPackage } from './package';
 import { emptyConfig, type DriveConfig, type DriveFolder, type TypstDriveFile } from './config';
@@ -192,7 +192,7 @@ function scheduleTab(s: State): Tab {
   const fmt: Fmt[][] = Array.from({ length: nRows }, () => Array.from({ length: nCols }, () => ({})));
   const owner: number[][] = Array.from({ length: nRows }, () => Array(nCols).fill(-1));
   const merges: [number, number, number][] = [];
-  const rowOf = (m: number) => t0 + Math.round((m - DAY_START) / SLOT);
+  const rowOf = (m: number, up = false) => t0 + (up ? Math.ceil : Math.floor)((m - DAY_START) / SLOT);
   sched.forEach((x, i) => { rows[0][1 + i] = `${x.name} Schedule`; });
   ['Room name', 'Room type', ...caps.map((c) => c.name)].forEach((l, i) => { rows[i][L] = l; });
   for (let i = 0; i < t0; i++) fmt[i][L] = { bg: '#efefef' };
@@ -233,14 +233,14 @@ function scheduleTab(s: State): Tab {
   summary.forEach(([label, val], i) => { rows[t0 + 2 * i][L] = label; fmt[t0 + 2 * i][L] = { bg: '#efefef' }; rows[t0 + 2 * i + 1][L] = val; });
 
   const place = (c: number, start: number, end: number, name: string, color: string) => {
-    const r1 = rowOf(Math.max(start, DAY_START)), r2 = rowOf(Math.min(end, DAY_END)) - 1;
+    const r1 = rowOf(Math.max(start, DAY_START)), r2 = rowOf(Math.min(end, DAY_END), true) - 1;
     if (r2 < r1) return;
     for (let r = r1; r <= r2; r++) if (owner[r][c] >= 0) { rows[owner[r][c]][c] += ` / ${name}`; return; }
-    rows[r1][c] = name;
+    rows[r1][c] = (start - DAY_START) % SLOT || (end - DAY_START) % SLOT ? `${name} (${fmtTime(start)}–${fmtTime(end)})` : name;
     for (let r = r1; r <= r2; r++) { owner[r][c] = r1; fmt[r][c] = { bg: color, fg: textColor(color) }; }
     if (r2 > r1) merges.push([r1, c, r2 - r1 + 1]);
   };
-  for (const p of s.phases) sched.forEach((x, i) => { const tm = phaseTimes(p, x.key); place(1 + i, tm.start, tm.end, p.name, p.color); });
+  for (const p of s.phases) sched.forEach((x, i) => { if (!inSched(p, x.key)) return; const tm = phaseTimes(p, x.key); place(1 + i, tm.start, tm.end, p.name, p.color); });
   const ev = new Map(s.events.map((e) => [e.id, e]));
   s.blocks.filter((b) => col[b.roomId] !== undefined && ev.has(b.eventId))
     .sort((a, b) => ev.get(a.eventId)!.start - ev.get(b.eventId)!.start)
@@ -274,7 +274,7 @@ function dataTabs(s: State, d: DriveConfig, savedAt: string): Tab[] {
     head('Room schedule', ['Room', 'Room ID', 'Status', 'Event', 'Start', 'End'],
       blocks.map((x) => [x.r.name, x.r.id, x.r.status ?? '', x.e.name, t(x.e.start), t(x.e.end)]), (i) => [3, blocks[i].e.color]),
     head('Phases', ['Phase', ...(s.config.phaseSchedules ?? []).flatMap((x) => [`${x.name} start`, `${x.name} end`])],
-      s.phases.map((p) => [p.name, ...(s.config.phaseSchedules ?? []).flatMap((x) => { const tm = phaseTimes(p, x.key); return [t(tm.start), t(tm.end)]; })])),
+      s.phases.map((p) => [p.name, ...(s.config.phaseSchedules ?? []).flatMap((x) => { if (!inSched(p, x.key)) return ['', '']; const tm = phaseTimes(p, x.key); return [t(tm.start), t(tm.end)]; })])),
     head('Categories', ['Category', 'Color', 'Internal maps', 'External maps'],
       s.categories.map((c) => [c.name, c.color, c.internal, c.external]), (i) => [1, s.categories[i].color]),
   ];
