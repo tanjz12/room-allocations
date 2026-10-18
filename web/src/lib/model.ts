@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
-import { DEFAULT_ROOM_STATUSES, emptyConfig, mergeLegendExtras, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomMatch, type RoomSign } from './config';
+import { DEFAULT_ROOM_STATUSES, emptyConfig, mergeLegendExtras, type Config, type PillBound, type ProctorLine, type ProctorPill, type Proctors, type RoomSign, type SummaryRow } from './config';
 
 /** Only rooms with status Yes are scheduled or counted. `typeAuto`: the type comes from the room type rules instead of being set by hand. */
 export type Room = { id: string; name: string; building: string; type: string; typeAuto?: boolean; base: number | null; overrides: Record<string, number>; status?: string; sign?: RoomSign };
@@ -118,6 +118,7 @@ export function normalize(s: Partial<State>): State {
   for (const c of out.categories) delete (c as Category & { hideOn?: unknown }).hideOn;
   if (!out.capTypes.some((c) => c.id === 'base')) out.capTypes.unshift(structuredClone(RAW_CAP));
   if (out.config.proctors) migrateProctors(out.config.proctors = structuredClone(out.config.proctors));
+  migrateSummary(out);
   applyPhaseRefs(out);
   applyTypeRules(out);
   out.version = STATE_VERSION;
@@ -217,40 +218,57 @@ export function highlightTotals(state: State) {
     .sort((a, b) => (a.e.id === h.leadId ? -1 : 0) - (b.e.id === h.leadId ? -1 : 0) || b.total - a.total || a.e.name.localeCompare(b.e.name));
   return { items, total: items.reduce((a, x) => a + x.total, 0) };
 }
-export type ProcRoom = { r: Room; v: number };
 export const proctorLabel = (half: string) => (half ? `${half} proctors` : 'Proctors');
-export const procRooms = (state: State, roomIds: Iterable<string>, capId: string): ProcRoom[] =>
-  [...new Set(roomIds)].map((id) => state.rooms.find((x) => x.id === id && roomActive(x))).filter((r) => !!r)
-    .map((r) => ({ r, v: roomCapacity(state, r, capId).value ?? 0 }));
-const boundTime = (state: State, b: PillBound | undefined, dflt: number) => {
-  if (!b) return dflt;
-  if ('time' in b) return b.time;
-  const ph = state.phases.find((p) => p.id === b.phaseId);
-  return ph ? ph[b.edge] : dflt;
-};
-/** Each proctor pill's slots and the proctors needed at its busiest slot, from the package's proctor rules. */
-export function proctorPills(state: State) {
-  const P = state.config.proctors;
-  if (!P) return [];
-  return P.pills.map((pill) => {
-    const counted = state.events.filter((e) => e.group === pill.group && !pill.excludeIds.includes(e.id));
-    const proctorsAt = (t: number, capId: string) => {
-      const rooms = procRooms(state, state.blocks.filter((b) => counted.some((e) => e.id === b.eventId && eventAt(e, t))).map((b) => b.roomId), capId);
-      return { n: rooms.reduce((n, x) => n + x.v, 0), rooms };
-    };
-    const peak = (slots: number[], capId: string) =>
-      slots.map((t) => proctorsAt(t, capId)).reduce((best, x) => (x.n > best.n ? x : best), { n: 0, rooms: [] as ProcRoom[] });
-    const from = boundTime(state, pill.from, -Infinity), to = boundTime(state, pill.to, Infinity);
-    const slots = SLOTS.filter((t) => t >= from && t < to);
-    return { pill, slots, min: peak(slots, P.minCap), ideal: peak(slots, P.idealCap) };
-  });
+/** Events of `group` starting inside the phase: the ones a proctors summary row counts. */
+export const phaseEvents = (s: State, ph: Phase, group: string) => s.events.filter((e) => e.group === group && ph.start <= e.start && e.start < ph.end);
+export const typeMatches = (r: Room, t: string) => r.type === t || baseType(r.type) === t;
+const capSum = (s: State, rooms: Room[], capId: string | undefined) =>
+  capId ? Math.round(rooms.reduce((n, r) => n + (roomCapacity(s, r, capId).value ?? 0), 0) * 100) / 100 : 0;
+/** A summary row's number (for proctors: `n` is min, plus `ideal`) and the active rooms it counts. */
+export function summaryValue(s: State, x: SummaryRow): { n: number; pills?: number[]; rooms: Room[]; phases?: { ph: Phase; rooms: Room[] }[] } {
+  const active = s.rooms.filter(roomActive);
+  const used = (ids: Set<string>) => { const u = new Set(s.blocks.filter((b) => ids.has(b.eventId)).map((b) => b.roomId)); return active.filter((r) => u.has(r.id)); };
+  if (x.kind === 'cap') {
+    const rooms = active.filter((r) => x.types.some((t) => typeMatches(r, t)));
+    return { n: capSum(s, rooms, x.capType), rooms };
+  }
+  if (x.kind === 'event') {
+    const rooms = used(new Set([x.eventId]));
+    return { n: capSum(s, rooms, s.events.find((e) => e.id === x.eventId)?.capacityType), rooms };
+  }
+  const phases = x.phaseIds.map((id) => s.phases.find((p) => p.id === id)).filter((p) => !!p)
+    .map((ph) => ({ ph, rooms: used(new Set(phaseEvents(s, ph, x.group).map((e) => e.id))) }));
+  const pills = (s.config.proctorCaps?.pills ?? []).map((p) => Math.max(0, ...phases.map((q) => capSum(s, q.rooms, p.capType))));
+  return { n: pills[0] ?? 0, pills, rooms: [...new Set(phases.flatMap((q) => q.rooms))], phases };
+}
+/** Turns old summary totals, event totals and proctor pills into summary rows. */
+function migrateSummary(out: State) {
+  const cfg = out.config;
+  if (!cfg.summary?.length && (out.summaryTotals.length || cfg.summaryEventIds?.length || cfg.proctors)) {
+    const rows: SummaryRow[] = out.summaryTotals.map((t) => ({ id: t.id, kind: 'cap', label: `${t.label} Capacity`, capType: t.capType,
+      types: Object.keys(out.typeTags).filter((ty) => out.typeTags[ty].includes(t.tagId)) }));
+    for (const id of cfg.summaryEventIds ?? []) {
+      const e = out.events.find((x) => x.id === id);
+      if (e) rows.push({ id: uid('sum'), kind: 'event', label: e.name, eventId: id });
+    }
+    const P = cfg.proctors;
+    if (P) {
+      cfg.proctorCaps = { pills: [{ capType: P.minCap, name: 'min' }, { capType: P.idealCap, name: 'ideal' }], listed: (P.listed ?? []).filter((m) => m.field === 'type').map((m) => m.value) };
+      for (const g of new Set(P.pills.map((p) => p.group))) {
+        const skip = P.pills.filter((p) => p.group === g).flatMap((p) => p.excludeIds);
+        for (const ph of out.phases) if (phaseEvents(out, ph, g).some((e) => !skip.includes(e.id)))
+          rows.push({ id: uid('sum'), kind: 'proctors', label: `${ph.name} proctors`, phaseIds: [ph.id], group: g });
+      }
+    }
+    cfg.summary = rows;
+  }
+  cfg.summary ??= [];
+  for (const x of cfg.summary) if (x.kind === 'proctors' && !x.phaseIds) { const o = x as { phaseId?: string }; x.phaseIds = o.phaseId ? [o.phaseId] : []; delete o.phaseId; }
+  delete cfg.summaryEventIds; delete cfg.proctors; out.summaryTotals = [];
 }
 type OldProctors = Proctors & { bigType?: string; group?: string; excludeIds?: string[]; splitPhaseId?: string; halves?: [string, string]; smallLabel?: string; rows?: { label: string; eventIds: string[] }[] };
 /** "Large (Ana, Bo)" is room type Large. */
 export const baseType = (t: string) => t.replace(/\s*\(.*$/, '') || t;
-export const roomMatches = (r: Room, m: RoomMatch) =>
-  m.field === 'room' ? r.id === m.value : m.field === 'type' ? r.type === m.value || baseType(r.type) === m.value : (r[m.field] ?? '') === m.value;
-export const roomListed = (P: Proctors | undefined, r: Room) => !!P?.listed.some((m) => roomMatches(r, m));
 /** Turns the old morning/afternoon proctor settings (one event group for all) into pills. */
 export function migrateProctors(P: OldProctors) {
   const group = P.group ?? '', excludeIds = P.excludeIds ?? [];
@@ -272,15 +290,6 @@ export function migrateProctors(P: OldProctors) {
 /** Drops a deleted event from the summary settings. */
 export function forgetEvent(d: State, id: string) {
   const drop = (ids?: string[]) => ids?.filter((x) => x !== id);
-  d.config.summaryEventIds = drop(d.config.summaryEventIds)!;
-  for (const t of d.summaryTotals) if (t.eventIds?.includes(id)) delete t.eventIds;
-  const P = d.config.proctors;
-  P?.pills.forEach((p) => { p.excludeIds = drop(p.excludeIds)!; p.lines.forEach((l) => { l.eventIds = drop(l.eventIds)!; }); });
+  d.config.summary = d.config.summary?.filter((x) => !(x.kind === 'event' && x.eventId === id));
   for (const c of [...(d.config.sameColors ?? []), ...(d.config.colorOptions ?? []).flatMap((o) => o.colors)]) c.eventIds = drop(c.eventIds)!;
 }
-export const summaryRoomUsed = (state: State, x: SummaryTotal, roomId: string) =>
-  !(x.eventIds?.length || x.eventGroups?.length) || state.blocks.some((b) => b.roomId === roomId
-    && (x.eventIds?.includes(b.eventId) || !!x.eventGroups?.includes(state.events.find((e) => e.id === b.eventId)?.group ?? '\u0000')));
-export const summaryTotalValue = (state: State, x: SummaryTotal) =>
-  state.rooms.filter((r) => roomActive(r) && roomTags(state, r).some((y) => y.id === x.tagId) && summaryRoomUsed(state, x, r.id))
-    .reduce((t, r) => t + (roomCapacity(state, r, x.capType).value ?? 0), 0);

@@ -12,7 +12,8 @@ function renameType(d: State, from: string, to: string) {
   d.config.roomTypes = d.config.roomTypes.map((t) => (t === from ? to : t));
   key(d.typeTags); key(d.config.typeRules); key(d.config.sheetTypeFill);
   d.capTypes.forEach((c) => key(c.formulas));
-  d.config.proctors?.listed.forEach((m) => { if (m.field === 'type' && m.value === from) m.value = to; });
+  d.config.summary?.forEach((x) => { if (x.kind === 'cap') x.types = x.types.map((t) => (t === from ? to : t)); });
+  if (d.config.proctorCaps?.listed) d.config.proctorCaps.listed = d.config.proctorCaps.listed.map((t) => (t === from ? to : t));
 }
 
 /** Text box that saves on Enter or when it loses focus. */
@@ -132,8 +133,7 @@ export default function RoomsView({ state, update }: ViewProps) {
               ))}
               <td><button className="danger" onClick={() => {
                 if (state.events.some((e) => e.capacityType === c.id)) return setMsg(`Events still use ${c.name}; change their capacity type first.`);
-                if (state.summaryTotals.some((x) => x.capType === c.id)) return setMsg(`A summary total still uses ${c.name}; change it under Edit summary on Schedule first.`);
-                if ([state.config.proctors?.minCap, state.config.proctors?.idealCap].includes(c.id)) return setMsg(`Proctors still use ${c.name}; change it under Edit summary on Schedule first.`);
+                if (state.config.summary?.some((x) => x.kind === 'cap' && x.capType === c.id) || state.config.proctorCaps?.pills?.some((p) => p.capType === c.id)) return setMsg(`The summary still uses ${c.name}; change it under Edit summary on Schedule first.`);
                 update((d) => { d.capTypes = d.capTypes.filter((x) => x.id !== c.id); d.rooms.forEach((r) => delete r.overrides[c.id]); });
               }}>Delete</button></td>
             </tr>
@@ -243,7 +243,6 @@ export default function RoomsView({ state, update }: ViewProps) {
                   setStatusMsg(''); update((d) => {
                     const y = d.config.roomStatuses?.find((z) => z.name === st.name); if (y) y.name = v;
                     d.rooms.forEach((r) => { if (r.status === st.name) r.status = v; });
-                    d.config.proctors?.listed.forEach((m) => { if (m.field === 'status' && m.value === st.name) m.value = v; });
                   });
                 }} /></td>
                 <td>{n}</td>
@@ -289,7 +288,6 @@ export default function RoomsView({ state, update }: ViewProps) {
               <td><ConfirmButton onConfirm={() => update((d) => {
                 d.rooms = d.rooms.filter((x) => x.id !== r.id);
                 d.blocks = d.blocks.filter((b) => b.roomId !== r.id);
-                if (d.config.proctors) d.config.proctors.listed = d.config.proctors.listed.filter((m) => !(m.field === 'room' && m.value === r.id));
                 d.config.maps.forEach((m) => { if (m.keepOrig) m.keepOrig = m.keepOrig.filter((x) => x !== r.id); });
               })} /></td>
             </tr>
@@ -315,7 +313,6 @@ export default function RoomsView({ state, update }: ViewProps) {
                   if (!v || v === b) return;
                   update((d) => {
                     d.rooms.forEach((r) => { if (r.building === b) r.building = v; });
-                    d.config.proctors?.listed.forEach((m) => { if (m.field === 'building' && m.value === b) m.value = v; });
                   });
                 }} /></td>
                 <td>{rs.length}</td>

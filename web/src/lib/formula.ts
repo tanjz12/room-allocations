@@ -87,3 +87,61 @@ export function evaluate(expr: string, lookup: (name: string) => number): number
   if (p < toks.length) throw new Error(`Unexpected "${toks[p].v}"`);
   return v;
 }
+
+/** The same expression as a Google Sheets formula (without "="); `ref` turns a variable into a cell reference. */
+export function toSheetFormula(expr: string, ref: (name: string) => string): string {
+  const toks = tokenize(expr);
+  let p = 0;
+  const peek = () => toks[p];
+  const eat = (v?: string) => {
+    const t = toks[p];
+    if (!t || (v && t.v !== v)) throw new Error(`Expected ${v ?? 'value'}`);
+    p++; return t;
+  };
+  const call = (fn: string, a: string[]) => {
+    if (fn === 'floor' || fn === 'ceil') return `${fn === 'floor' ? 'FLOOR' : 'CEILING'}(${a[0]},${a[1] ?? 1})`;
+    if (fn === 'round') return a.length > 1 ? `MROUND(${a[0]},${a[1]})` : `ROUND(${a[0]})`;
+    if (fn === 'min' || fn === 'max') return `${fn.toUpperCase()}(${a.join(',')})`;
+    throw new Error(`Unknown function ${fn}`);
+  };
+  const primary = (): string => {
+    const t = peek();
+    if (!t) throw new Error('Unexpected end');
+    if (t.t === 'num') { p++; return t.v; }
+    if (t.v === '-') { p++; return `-${primary()}`; }
+    if (t.v === '(') { p++; const v = or(); eat(')'); return `(${v})`; }
+    if (t.t === 'id') {
+      p++;
+      if (peek()?.v === '(') {
+        p++; const args: string[] = [];
+        if (peek()?.v !== ')') { args.push(add()); while (peek()?.v === ',') { p++; args.push(add()); } }
+        eat(')'); return call(t.v.toLowerCase(), args);
+      }
+      return ref(t.v);
+    }
+    throw new Error(`Unexpected "${t.v}"`);
+  };
+  const chain = (next: () => string, ops: string[]) => () => {
+    let v = next();
+    while (peek() && ops.includes(peek().v)) { const o = eat().v; v += o + next(); }
+    return v;
+  };
+  const mul = chain(primary, ['*', '/']);
+  const add = chain(mul, ['+', '-']);
+  const cmp = (): string => {
+    let v = add();
+    while (peek() && ['<', '<=', '>', '>=', '=', '!='].includes(peek().v)) { const o = eat().v; v = `(${v}${o === '!=' ? '<>' : o}${add()})*1`; }
+    return v;
+  };
+  const word = (w: string) => peek()?.t === 'id' && peek().v.toLowerCase() === w;
+  const logic = (next: () => string, w: string, fn: string) => () => {
+    const parts = [next()];
+    while (word(w)) { p++; parts.push(next()); }
+    return parts.length > 1 ? `${fn}(${parts.join(',')})*1` : parts[0];
+  };
+  const and = logic(cmp, 'and', 'AND');
+  const or = logic(and, 'or', 'OR');
+  const v = or();
+  if (p < toks.length) throw new Error(`Unexpected "${toks[p].v}"`);
+  return v;
+}

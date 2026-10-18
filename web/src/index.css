@@ -41,7 +41,6 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .mono { font-family: ui-monospace, Consolas, monospace; width: 220px; }
 .ovr { background: #ffe8b3; }
-.proc-in { width: 3.2em; padding: 0 2px; font-size: 11px; text-align: right; }
 .ovr-key { background: #ffe8b3; padding: 0 4px; }
 .chips { max-width: 700px; }
 .chip { display: inline-block; background: #eef1f6; border-radius: 10px; padding: 1px 7px; margin: 1px 2px; white-space: nowrap; }
@@ -174,6 +173,10 @@ header .confirm-in { width: 100px; }
 .stat b { font-size: 20px; }
 .stat.proctors { cursor: default; min-width: 180px; max-width: 460px; }
 .stat.proctors > span:first-child { font-weight: 700; color: #222; }
+.proc-pill select { border: none; background: transparent; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.pill-name { border: none; background: transparent; padding: 0; margin-left: 4px; font: inherit; color: inherit; outline: none; field-sizing: content; min-width: 2ch; }
+.pill-name:focus { cursor: text; }
+.proc-in { width: 3.2em; padding: 0 2px; font-size: 11px; text-align: right; }
 .stat small { font-size: 12px; font-weight: 400; color: #555; }
 .small { font-size: 11px; }
 .summary-block { padding: 4px 16px 0; background: #fff; border-bottom: 1px solid #ddd; }
@@ -299,12 +302,6 @@ h1.title { cursor: text; }
   .more-menu .menu { width: max-content; max-width: calc(100vw - 24px); white-space: normal; }
   .more-menu .menu button { text-align: left; }
 }
-.proctor-settings th { position: static; width: 170px; white-space: nowrap; }
-.proctor-settings textarea { width: 100%; min-width: 320px; font: inherit; }
-.pill-edit { border: 1px solid #d6dde3; border-radius: 6px; padding: 6px 8px; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-.pill-edit.collapsed { background: #f6f8fa; }
-.pill-edit.collapsed button { padding: 0 8px; }
-.pill-line { padding-left: 14px; }
 .nowrap { white-space: nowrap; }
 .suggest { position: relative; display: inline-block; }
 .suggest input { width: 130px; padding: 1px 6px; border-radius: 10px; }
@@ -312,9 +309,6 @@ h1.title { cursor: text; }
 .suggest-list button { text-align: left; border: none; background: transparent; padding: 3px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest-list button.on, .suggest-list button:hover { background: #e6f2f4; }
 .suggest-list > span { padding: 3px 6px; }
-.pill-edit button.pill-toggle { border: none; background: none; padding: 0 2px; color: #555; font-size: 14px; cursor: pointer; }
-.pill-edit button.pill-toggle:hover { color: var(--bmt-teal-dark); }
-.pill-help { margin-top: 6px; } .pill-help > summary { cursor: pointer; }
 
 .same-colors { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 button.group-toggle { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }

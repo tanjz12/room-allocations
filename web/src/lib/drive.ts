@@ -1,4 +1,5 @@
-import { phaseTimes, DAY_END, DAY_START, SLOT, eventTotals, fmtTime, proctorPills, roomActive, roomCapacity, summaryTotalValue, textColor, type State } from './model';
+import { phaseTimes, DAY_END, DAY_START, SLOT, fmtTime, RAW_NAME, roomActive, roomCapacity, summaryValue, textColor, type Room, type State } from './model';
+import { toSheetFormula } from './formula';
 import { PACKAGE_FORMAT, makePackage, packageText, readPackage } from './package';
 import { emptyConfig, type DriveConfig, type DriveFolder, type TypstDriveFile } from './config';
 import { FOLDER_MIME, pickDrive } from './picker';
@@ -147,7 +148,8 @@ export async function saveDrive(s: State, base: string, force: boolean): Promise
 }
 
 /* ---------- Readable Google Sheet copy ---------- */
-type Cell = string | number | boolean | null | undefined;
+/** `{ f }` is a Sheets formula, e.g. `{ f: '=SUM(G4:BW4)' }`. */
+type Cell = string | number | boolean | null | undefined | { f: string };
 type Fmt = { bg?: string; fg?: string; bold?: boolean };
 const rgb = (hex: string) => {
   const h = hex.replace('#', '');
@@ -156,7 +158,7 @@ const rgb = (hex: string) => {
 };
 const cellData = (v: Cell, f: Fmt = {}, extra: object = {}) => ({
   userEnteredValue: v === null || v === undefined || v === '' ? undefined
-    : typeof v === 'number' ? { numberValue: v } : typeof v === 'boolean' ? { boolValue: v } : { stringValue: String(v) },
+    : typeof v === 'object' ? { formulaValue: v.f } : typeof v === 'number' ? { numberValue: v } : typeof v === 'boolean' ? { boolValue: v } : { stringValue: String(v) },
   userEnteredFormat: {
     ...(f.bg ? { backgroundColor: rgb(f.bg) } : {}),
     textFormat: { fontFamily: 'Arial', bold: !!f.bold, ...(f.fg ? { foregroundColor: rgb(f.fg) } : {}) },
@@ -165,40 +167,71 @@ const cellData = (v: Cell, f: Fmt = {}, extra: object = {}) => ({
 });
 type Tab = { name: string; rows: Cell[][]; fmt?: (r: number, c: number) => Fmt; extra?: (r: number, c: number) => object; frozenRows?: number; frozenCols?: number; merges?: [number, number, number][]; widths?: [number, number][] };
 
-/** The numbers shown in column F of the Schedule tab, from the open package's rules. */
-export function sheetView(s: State) {
-  const caps = s.capTypes.map((c) => c.name);
-  const rooms = s.rooms.filter(roomActive).map((r) => ({ id: r.id, name: r.name, type: r.type, caps: s.capTypes.map((c) => roomCapacity(s, r, c.id).value) }));
-  const totals = eventTotals(s);
-  const summary: [string, string | number][] = [
-    ...s.summaryTotals.map((x): [string, number] => [`${x.label} Capacity`, summaryTotalValue(s, x)]),
-    ...s.config.summaryEventIds.map((id) => totals.find((x) => x.e.id === id)).filter((x) => !!x).map((x): [string, number] => [x.e.name, x.total]),
-    ...proctorPills(s).map((h): [string, string] => [h.pill.name, `${h.min.n} min · ${h.ideal.n} ideal`]),
-  ];
-  return { caps, rooms, summary };
+/** Sheets column letters for a 0-based column index. */
+const colA1 = (c: number) => { let out = ''; for (let n = c + 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(65 + ((n - 1) % 26)) + out; return out; };
+
+/** A room's capacity cell in the Schedule tab: overrides stay typed numbers; formula capacities become Sheets formulas on the cells above. */
+function capCell(s: State, r: Room, k: number, col: string, row0: number): Cell {
+  const ct = s.capTypes[k];
+  const res = roomCapacity(s, r, ct.id);
+  if (ct.id === 'base') return res.value ?? r.base ?? '';
+  if (res.source !== 'formula' || res.value == null) return res.value ?? '';
+  try {
+    return { f: '=' + toSheetFormula(ct.formulas[r.type], (name) => {
+      const i = s.capTypes.findIndex((c) => (name === RAW_NAME ? c.id === 'base' : c.id === name || `[${c.name}]` === name));
+      if (i < 0) throw new Error(name);
+      return `${col}${row0 + i + 1}`;
+    }) };
+  } catch { return res.value; }
 }
 
 function scheduleTab(s: State): Tab {
-  const v = sheetView(s);
-  const t0 = 2 + v.caps.length, nT = (DAY_END - DAY_START) / SLOT + 1, nRows = t0 + nT + 1, sched = s.config.phaseSchedules ?? [], L = Math.max(5, sched.length + 3), nCols = L + 1 + v.rooms.length;
+  const rooms = s.rooms.filter(roomActive), caps = s.capTypes;
+  const t0 = 2 + caps.length, nT = (DAY_END - DAY_START) / SLOT + 1, nRows = t0 + nT + 1, sched = s.config.phaseSchedules ?? [], L = Math.max(5, sched.length + 3), nCols = L + 1 + rooms.length;
   const rows: Cell[][] = Array.from({ length: nRows }, () => Array(nCols).fill(''));
   const fmt: Fmt[][] = Array.from({ length: nRows }, () => Array.from({ length: nCols }, () => ({})));
   const owner: number[][] = Array.from({ length: nRows }, () => Array(nCols).fill(-1));
   const merges: [number, number, number][] = [];
+  const rowOf = (m: number) => t0 + Math.round((m - DAY_START) / SLOT);
   sched.forEach((x, i) => { rows[0][1 + i] = `${x.name} Schedule`; });
-  ['Room name', 'Room type', ...v.caps].forEach((l, i) => { rows[i][L] = l; });
+  ['Room name', 'Room type', ...caps.map((c) => c.name)].forEach((l, i) => { rows[i][L] = l; });
   for (let i = 0; i < t0; i++) fmt[i][L] = { bg: '#efefef' };
   const col: Record<string, number> = {};
-  v.rooms.forEach((r, i) => {
+  rooms.forEach((r, i) => {
     const c = L + 1 + i; col[r.id] = c;
     rows[0][c] = r.name; rows[1][c] = r.type;
-    r.caps.forEach((x, k) => { rows[2 + k][c] = x ?? ''; });
+    caps.forEach((_, k) => { rows[2 + k][c] = capCell(s, r, k, colA1(c), 2); });
     for (let k = 0; k < t0; k++) fmt[k][c] = { bg: s.config.sheetTypeFill?.[r.type] ?? '#d9ead3' };
   });
   for (let k = 0; k < nT; k++) rows[t0 + k][0] = fmtTime(DAY_START + k * SLOT).replace(/ [AP]M$/, '');
   rows[t0 + nT][0] = 'END';
-  v.summary.forEach(([label, val], i) => { rows[t0 + 2 * i][L] = label; fmt[t0 + 2 * i][L] = { bg: '#efefef' }; rows[t0 + 2 * i + 1][L] = val; });
-  const rowOf = (m: number) => t0 + Math.round((m - DAY_START) / SLOT);
+
+  // Column F summary: label, then a SUM over the room columns the site counts for that row.
+  const capRow = (id: string | undefined) => { const k = caps.findIndex((c) => c.id === id); return k < 0 ? 0 : 3 + k; };
+  const sumExpr = (rs: Room[], row: number): string => {
+    const cs = rs.map((r) => col[r.id]).filter((c) => c !== undefined).sort((a, b) => a - b);
+    const parts: string[] = [];
+    for (let k = 0; k < cs.length; k++) {
+      let e = k; while (e + 1 < cs.length && cs[e + 1] === cs[e] + 1) e++;
+      parts.push(e > k ? `${colA1(cs[k])}${row}:${colA1(cs[e])}${row}` : `${colA1(cs[k])}${row}`); k = e;
+    }
+    return row && parts.length ? `SUM(${parts.join(',')})` : '0';
+  };
+  const sumCols = (rs: Room[], row: number): Cell => ({ f: '=' + sumExpr(rs, row) });
+  const summary: [string, Cell][] = [];
+  for (const x of s.config.summary ?? []) {
+    const v = summaryValue(s, x);
+    if (x.kind === 'cap') summary.push([x.label, sumCols(v.rooms, capRow(x.capType))]);
+    else if (x.kind === 'event') summary.push([x.label, sumCols(v.rooms, capRow(s.events.find((e) => e.id === x.eventId)?.capacityType))]);
+    else {
+      for (const p of s.config.proctorCaps?.pills ?? []) {
+        const each = (v.phases ?? []).map((q) => sumExpr(q.rooms, capRow(p.capType)));
+        summary.push([`${x.label} (${p.name})`, { f: '=' + (each.length > 1 ? `MAX(${each.join(',')})` : each[0] ?? '0') }]);
+      }
+    }
+  }
+  summary.forEach(([label, val], i) => { rows[t0 + 2 * i][L] = label; fmt[t0 + 2 * i][L] = { bg: '#efefef' }; rows[t0 + 2 * i + 1][L] = val; });
+
   const place = (c: number, start: number, end: number, name: string, color: string) => {
     const r1 = rowOf(Math.max(start, DAY_START)), r2 = rowOf(Math.min(end, DAY_END)) - 1;
     if (r2 < r1) return;
@@ -214,8 +247,8 @@ function scheduleTab(s: State): Tab {
     .forEach((b) => { const e = ev.get(b.eventId)!; place(col[b.roomId], e.start, e.end, e.name, e.color); });
   const center = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', wrapStrategy: 'WRAP' };
   return {
-    name: 'Schedule', rows, fmt: (r, c) => fmt[r][c], frozenRows: 2, frozenCols: 3, merges, widths: [[1, 120], [5, 150]],
-    extra: (r, c) => (r >= t0 ? (c === 5 ? { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', wrapStrategy: 'OVERFLOW_CELL' } : center) : {}),
+    name: 'Schedule', rows, fmt: (r, c) => fmt[r][c], frozenRows: 2, frozenCols: 3, merges, widths: [[1, 120], [L, 150]],
+    extra: (r, c) => (r >= t0 ? (c === L ? { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', wrapStrategy: 'OVERFLOW_CELL' } : center) : {}),
   };
 }
 

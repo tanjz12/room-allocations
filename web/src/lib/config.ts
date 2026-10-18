@@ -16,6 +16,17 @@ export type PillBound = { phaseId: string; edge: 'start' | 'end' } | { time: num
 /** A proctor pill counts rooms in use for `group` events (minus `excludeIds`) at the busiest slot of its time range (whole day if none). */
 export type ProctorPill = { id: string; name: string; group: string; excludeIds: string[]; from?: PillBound; to?: PillBound; lines: ProctorLine[] };
 /** Picks rooms by a text field: `room` matches a room id; `type` also matches “Large (names)” as Large. */
+/**
+ * One Schedule summary entry, in display order; each is also a label + formula pair in column F of the saved Sheet.
+ * `cap`: a capacity type added up over every room of the chosen types. `event`: the event's capacity added up over its rooms.
+ * `proctors`: each `proctorCaps.pills` capacity type added up over rooms with an event of `group` starting inside a phase, taking the largest phase per pill; rooms of `proctorCaps.listed` types are shown one by one with editable counts, the rest counted by type.
+ */
+/** One number on a proctors card: a capacity type added up over the rooms, shown with `name` after it (e.g. "min"). */
+export type ProctorCapPill = { capType: string; name: string };
+export type SummaryRow =
+  | { id: string; kind: 'cap'; label: string; capType: string; types: string[] }
+  | { id: string; kind: 'event'; label: string; eventId: string }
+  | { id: string; kind: 'proctors'; label: string; phaseIds: string[]; group: string };
 export type RoomMatch = { field: 'type' | 'building' | 'status' | 'room'; value: string };
 /** Proctor summary: rooms matching `listed` are shown one by one with editable counts; one pill per entry in `pills`; min / ideal capacity types give proctors per room. */
 export type Proctors = {
@@ -33,7 +44,9 @@ export const DEFAULT_ROOM_STATUSES: RoomStatus[] = [
 
 export type Config = {
   title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
-  subgroup?: Subgroup; highlight?: Highlight; summaryEventIds: string[]; proctors?: Proctors; sameColors?: SameColor[]; colorOptions?: ColorOption[];
+  subgroup?: Subgroup; highlight?: Highlight; summary?: SummaryRow[]; proctorCaps?: { pills?: ProctorCapPill[]; listed?: string[] };
+  /** Old packages only; turned into `summary` when opened. */
+  summaryEventIds?: string[]; proctors?: Proctors; sameColors?: SameColor[]; colorOptions?: ColorOption[];
   maps: MapDef[]; notes?: Record<string, string>;
   drive?: DriveConfig; sheetTypeFill?: Record<string, string>;
   /** Room type rules: a room following the rules gets the first type (in `roomTypes` order) whose condition on [Raw] is true. */
@@ -71,7 +84,7 @@ export const headerPrefix = (title: string) => { const t = title || DEFAULT_TITL
 /** Default export file name: the header prefix, then `base`, words joined by dashes. */
 export const exportName = (title: string, base: string) =>
   [headerPrefix(title), base].join(' ').replace(/[\\/:*?"<>|]+/g, ' ').trim().split(/\s+/).join('-');
-export const emptyConfig = (): Config => ({ title: DEFAULT_TITLE, roomTypes: [], eventGroups: [], eventOrder: [], summaryEventIds: [], maps: [] });
+export const emptyConfig = (): Config => ({ title: DEFAULT_TITLE, roomTypes: [], eventGroups: [], eventOrder: [], summary: [], maps: [] });
 
 export type PhaseSchedule = { key: string; name: string };
 

@@ -1,9 +1,7 @@
-import { baseType, uid, type State } from '../lib/model';
-import { Fragment, useState } from 'react';
-import type { PillBound, ProctorPill, Proctors, RoomMatch } from '../lib/config';
+import { uid, type State } from '../lib/model';
+import { useState } from 'react';
+import type { ProctorCapPill, SummaryRow } from '../lib/config';
 import { ConfirmButton, type ViewProps } from './common';
-
-const newPill = (name: string, group: string): ProctorPill => ({ id: uid('pill'), name, group, excludeIds: [], lines: [{ label: '', eventIds: [] }] });
 
 type Suggestion = { key: string; label: string; hint?: string };
 
@@ -50,158 +48,116 @@ export function EventChips({ state, ids, onChange, pool }: { state: State; ids: 
   );
 }
 
-const FIELD_NAMES: Record<RoomMatch['field'], string> = { type: 'room type', building: 'building', status: 'status', room: 'room' };
-
-/** Chips for room matches; type in the box to see matching room types, buildings, statuses and room names. */
-function RoomChips({ state, value, onChange }: { state: State; value: RoomMatch[]; onChange: (v: RoomMatch[]) => void }) {
-  const label = (m: RoomMatch) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value;
-  const key = (m: RoomMatch) => m.field + '\0' + m.value;
-  const all = new Map<string, RoomMatch>();
-  const add = (m: RoomMatch) => { if (m.value && !value.some((v) => key(v) === key(m))) all.set(key(m), m); };
-  for (const r of state.rooms) { add({ field: 'type', value: baseType(r.type) }); add({ field: 'type', value: r.type }); }
-  for (const r of state.rooms) add({ field: 'building', value: r.building });
-  for (const r of state.rooms) add({ field: 'status', value: r.status ?? '' });
-  for (const r of state.rooms) add({ field: 'room', value: r.id });
-  return (
-    <span className="tags-cell room-chips">
-      {value.map((m, i) => (
-        <span key={i} className="chip tag-chip" title={FIELD_NAMES[m.field]}>{label(m)}<span className="muted small">&nbsp;{FIELD_NAMES[m.field]}</span>
-          <button className="chip-x" title={`Remove ${label(m)}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button></span>
-      ))}
-      <SuggestAdd placeholder="+ type to add" label="Add room type, building, status or room" onPick={(k) => onChange([...value, all.get(k)!])}
-        options={[...all.values()].map((m) => ({ key: key(m), label: label(m), hint: FIELD_NAMES[m.field] }))} />
-    </span>
-  );
-}
+const KIND_NAMES: Record<SummaryRow['kind'], string> = { cap: 'Capacity total', event: 'Event total', proctors: 'Proctors' };
 
 export default function SummarySettings({ state, update }: Pick<ViewProps, 'state' | 'update'>) {
   const groups = [...new Set([...(state.config.eventGroups ?? []), ...state.events.map((e) => e.group).filter(Boolean)])];
-  const capTypes = state.capTypes;
-  const P = state.config.proctors;
-  const [openId, setOpenId] = useState('');
-  const openPill = P?.pills.find((x) => x.id === openId)?.id;
-  const listedName = P?.listed.length ? P.listed.map((m) => m.field === 'room' ? (state.rooms.find((r) => r.id === m.value)?.name ?? m.value) : m.value).join(', ') : 'listed rooms';
-  const setP = (f: (p: Proctors) => void) => update((d) => { if (d.config.proctors) f(d.config.proctors); });
-  const boundSelect = (b: PillBound | undefined, side: 'from' | 'to', set: (b?: PillBound) => void) => {
-    const v = !b ? '' : 'time' in b ? 't' : `${b.edge}:${b.phaseId}`;
-    return <>
-      <select value={v} onChange={(e) => {
-        const x = e.target.value;
-        if (!x) set(); else if (x === 't') set({ time: 720 });
-        else { const [edge, phaseId] = x.split(/:(.*)/s); set({ phaseId, edge: edge as 'start' | 'end' }); }
-      }}>
-        <option value="">{side === 'from' ? 'start of day' : 'end of day'}</option>
-        <option value="t">a time…</option>
-        {state.phases.map((ph) => <Fragment key={ph.id}>
-          <option value={`start:${ph.id}`}>{ph.name} starts</option>
-          <option value={`end:${ph.id}`}>{ph.name} ends</option>
-        </Fragment>)}
-      </select>
-      {b && 'time' in b && <> <input type="time" step={900} value={`${String(Math.floor(b.time / 60)).padStart(2, '0')}:${String(b.time % 60).padStart(2, '0')}`}
-        onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); if (!isNaN(h)) set({ time: h * 60 + (m || 0) }); }} /></>}
-    </>;
-  };
-  const capSelect = (value: string, set: (v: string) => void) => (
-    <select value={value} onChange={(e) => set(e.target.value)}>
-      <option value="">—</option>{capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+  const types = [...new Set([...state.config.roomTypes, ...state.rooms.map((r) => r.type)])].filter(Boolean);
+  const rows = state.config.summary ?? [];
+  const caps = state.config.proctorCaps ?? {};
+  const pills = caps.pills ?? [];
+  const set = (id: string, f: (x: SummaryRow) => void) => update((d) => { const x = d.config.summary?.find((y) => y.id === id); if (x) f(x); });
+  const add = (x: SummaryRow) => update((d) => { (d.config.summary ??= []).push(x); });
+  const move = (i: number, j: number) => update((d) => { const a = d.config.summary!; [a[i], a[j]] = [a[j], a[i]]; });
+  const setPills = (f: (a: ProctorCapPill[]) => void) => update((d) => { const c = (d.config.proctorCaps ??= {}); f((c.pills ??= [])); });
+  const setListed = (v: string[]) => update((d) => { (d.config.proctorCaps ??= {}).listed = v; });
+  const evName = (id: string) => state.events.find((e) => e.id === id)?.name ?? '';
+  const phaseLabel = (ids: string[]) => `${ids.map((id) => state.phases.find((p) => p.id === id)?.name ?? '').join(' + ')} proctors`;
+  const setPhases = (id: string, ids: string[]) => set(id, (y) => { if (y.kind !== 'proctors') return; if (y.label === phaseLabel(y.phaseIds)) y.label = phaseLabel(ids); y.phaseIds = ids; });
+  const capSelect = (value: string, onChange: (v: string) => void, label: string) => (
+    <select value={value} aria-label={label} onChange={(e) => onChange(e.target.value)}>
+      {!state.capTypes.some((c) => c.id === value) && <option value={value}>—</option>}
+      {state.capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>
   );
+  const detail = (x: SummaryRow) => {
+    if (x.kind === 'cap') {
+      const free = types.filter((t) => !x.types.includes(t));
+      return <>
+        {capSelect(x.capType, (v) => set(x.id, (y) => { if (y.kind === 'cap') y.capType = v; }), 'Capacity type')} of every room of type{' '}
+        <span className="tags-cell">
+          {x.types.map((t) => (
+            <span key={t} className="chip tag-chip">{t}
+              <button className="chip-x" title={`Remove ${t}`} onClick={() => set(x.id, (y) => { if (y.kind === 'cap') y.types = y.types.filter((z) => z !== t); })}>×</button></span>
+          ))}
+          {free.length > 0 && <select value="" aria-label="Add room type" onChange={(e) => { const v = e.target.value; if (v) set(x.id, (y) => { if (y.kind === 'cap') y.types.push(v); }); }}>
+            <option value="">+ type</option>{free.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>}
+        </span>
+      </>;
+    }
+    if (x.kind === 'event') return <>
+      <select value={x.eventId} aria-label="Event" onChange={(e) => { const v = e.target.value; set(x.id, (y) => { if (y.kind !== 'event') return; if (y.label === evName(y.eventId)) y.label = evName(v); y.eventId = v; }); }}>
+        {!state.events.some((e) => e.id === x.eventId) && <option value={x.eventId}>—</option>}
+        {state.events.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+      </select> capacity of every room it is in
+    </>;
+    return <>
+      proctors of rooms with a{' '}
+      <select value={x.group} aria-label="Event group" onChange={(e) => { const v = e.target.value; set(x.id, (y) => { if (y.kind === 'proctors') y.group = v; }); }}>
+        {[...new Set([x.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}
+      </select> event starting in{' '}
+      <span className="tags-cell">
+        {x.phaseIds.map((id) => (
+          <span key={id} className="chip tag-chip">{state.phases.find((p) => p.id === id)?.name ?? '—'}
+            <button className="chip-x" title="Remove phase" onClick={() => setPhases(x.id, x.phaseIds.filter((z) => z !== id))}>×</button></span>
+        ))}
+        {state.phases.some((p) => !x.phaseIds.includes(p.id)) && <select value="" aria-label="Add phase" onChange={(e) => { const v = e.target.value; if (v) setPhases(x.id, [...x.phaseIds, v]); }}>
+          <option value="">+ phase</option>{state.phases.filter((p) => !x.phaseIds.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>}
+      </span>{x.phaseIds.length > 1 && ' (largest phase)'}
+    </>;
+  };
+  const lastGroup = [...rows].reverse().find((x) => x.kind === 'proctors')?.group ?? groups[0] ?? '';
 
   return (
     <>
-      <h3>Summary totals</h3>
-      <p className="muted">
-        Shown first in the Schedule summary: the chosen capacity type added up over every room with the tag, whether or not it is scheduled, unless “Only rooms with” picks an event or event group.
-      </p>
-      <table className="table">
-        <thead><tr><th>Total</th><th>Rooms tagged</th><th>Capacity type</th><th>Only rooms with</th><th></th></tr></thead>
+      <p className="muted">Shown in this order in the summary, and in column F of the Google Sheet written by Save to Drive, where each one is a formula. Only rooms set to Yes count.</p>
+      {rows.length > 0 && <table className="table summary-rows">
+        <thead><tr><th>Label</th><th>Kind</th><th>Adds up</th><th></th></tr></thead>
         <tbody>
-          {state.summaryTotals.map((x, i) => (
+          {rows.map((x, i) => (
             <tr key={x.id}>
-              <td><input value={x.label} onChange={(e) => update((d) => { d.summaryTotals[i].label = e.target.value; })} /></td>
-              <td><select value={x.tagId} onChange={(e) => update((d) => { d.summaryTotals[i].tagId = e.target.value; })}>
-                {state.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></td>
-              <td><select value={x.capType} onChange={(e) => update((d) => { d.summaryTotals[i].capType = e.target.value; })}>
-                {capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></td>
-              <td><select value={x.eventIds?.[0] ? `e:${x.eventIds[0]}` : x.eventGroups?.[0] ? `g:${x.eventGroups[0]}` : ''}
-                onChange={(e) => update((d) => {
-                  const t = d.summaryTotals[i]; const v = e.target.value;
-                  delete t.eventIds; delete t.eventGroups;
-                  if (v.startsWith('e:')) t.eventIds = [v.slice(2)];
-                  if (v.startsWith('g:')) t.eventGroups = [v.slice(2)];
-                })}>
-                <option value="">any room</option>
-                <optgroup label="Event group">{groups.map((g) => <option key={g} value={`g:${g}`}>{g}</option>)}</optgroup>
-                <optgroup label="Event">{state.events.map((ev) => <option key={ev.id} value={`e:${ev.id}`}>{ev.name}</option>)}</optgroup>
-              </select></td>
-              <td><ConfirmButton onConfirm={() => update((d) => { d.summaryTotals = d.summaryTotals.filter((y) => y.id !== x.id); })} /></td>
+              <td><input value={x.label} aria-label="Label" onChange={(e) => { const v = e.target.value; set(x.id, (y) => { y.label = v; }); }} /></td>
+              <td className="muted nowrap">{KIND_NAMES[x.kind]}</td>
+              <td>{detail(x)}</td>
+              <td className="nowrap">
+                <button disabled={!i} title="Move up" onClick={() => move(i, i - 1)}>↑</button>
+                <button disabled={i === rows.length - 1} title="Move down" onClick={() => move(i, i + 1)}>↓</button>{' '}
+                <ConfirmButton onConfirm={() => update((d) => { d.config.summary = d.config.summary?.filter((y) => y.id !== x.id); })} />
+              </td>
             </tr>
           ))}
         </tbody>
-      </table>
-      <p><button disabled={!state.categories.length} title={state.categories.length ? undefined : 'Add a tag first'}
-        onClick={() => update((d) => { d.summaryTotals.push({ id: uid('t'), label: 'New total', tagId: d.categories[0].id, capType: 'base' }); })}>+ Add total</button></p>
-
-      <h3>Event totals</h3>
-      <p className="muted">Events whose total (their capacity type added up over their rooms) is shown in the Schedule summary.</p>
-      <p><EventChips state={state} ids={state.config.summaryEventIds} onChange={(ids) => update((d) => { d.config.summaryEventIds = ids; })} /></p>
-
-      <h3>Proctors</h3>
-      <p className="muted">Proctors needed at the busiest 15-minute slot: rooms in use for the chosen group's events, each counted once, with the min and ideal capacity types as the number of proctors per room.</p>
-      <p><label><input type="checkbox" checked={!!P} onChange={(e) => update((d) => {
-        if (!e.target.checked) { delete d.config.proctors; return; }
-        d.config.proctors = { minCap: '', idealCap: '', listed: [], pills: [newPill('Proctors', groups[0] ?? '')] };
-      })} /> Show proctors in the summary</label></p>
-      {P && <table className="table proctor-settings"><tbody>
-        <tr><th>Proctors per room</th><td>min {capSelect(P.minCap, (v) => setP((p) => { p.minCap = v; }))}
-          {' '}ideal {capSelect(P.idealCap, (v) => setP((p) => { p.idealCap = v; }))}</td></tr>
-        <tr><th>Rooms listed one by one</th><td><RoomChips state={state} value={P.listed} onChange={(v) => setP((p) => { p.listed = v; })} /></td></tr>
-        <tr><th>Pills</th><td>
-          {P.pills.map((pill, pi) => (
-            pill.id !== openPill ? (
-            <div key={pill.id} className="pill-edit collapsed">
-              <div><button className="pill-toggle" title="Edit" aria-label="Expand pill" onClick={() => setOpenId(pill.id)}>▸</button>
-                {' '}<b>{pill.name || 'Untitled pill'}</b>{' '}
-                <span className="muted small">{pill.group || '—'} events{pill.from || pill.to ? ', part of the day' : ', whole day'}{pill.lines.some((l) => l.label) ? ` · ${pill.lines.map((l) => l.label).filter(Boolean).join(', ')}` : ''}</span>
-                {' '}<button onClick={() => setOpenId(pill.id)}>Edit</button></div>
-            </div>
-            ) : (
-            <div key={pill.id} className="pill-edit">
-              <div><button className="pill-toggle" title="Collapse" aria-label="Collapse pill" onClick={() => setOpenId('')}>▾</button>
-                {' '}<input value={pill.name} title="Pill name" onChange={(e) => setP((p) => { p.pills[pi].name = e.target.value; })} />
-                {' '}from {boundSelect(pill.from, 'from', (b) => setP((p) => { if (b) p.pills[pi].from = b; else delete p.pills[pi].from; }))}
-                {' '}to {boundSelect(pill.to, 'to', (b) => setP((p) => { if (b) p.pills[pi].to = b; else delete p.pills[pi].to; }))}
-                {' '}<ConfirmButton label="Delete pill" onConfirm={() => setP((p) => { p.pills.splice(pi, 1); })} /></div>
-              <div className="pill-line">counts <select value={pill.group} title="Event group this pill counts" onChange={(e) => setP((p) => { p.pills[pi].group = e.target.value; })}>
-                {[...new Set([pill.group, ...groups])].map((g) => <option key={g} value={g}>{g || '—'}</option>)}</select> events
-                {' '}leaving out <EventChips state={state} ids={pill.excludeIds} pool={state.events.filter((e) => e.group === pill.group).map((e) => e.id)}
-                  onChange={(ids) => setP((p) => { p.pills[pi].excludeIds = ids; })} /></div>
-              {pill.lines.map((l, li) => (
-                <div key={li} className="pill-line">
-                  <input value={l.label} placeholder="Line label" title="Line label (can be blank)" onChange={(e) => setP((p) => { p.pills[pi].lines[li].label = e.target.value; })} />
-                  {' '}<select value={l.rooms ?? ''} title="Which rooms this line counts" onChange={(e) => setP((p) => {
-                    const x = p.pills[pi].lines[li]; const v = e.target.value as 'listed' | 'others' | '';
-                    if (v) x.rooms = v; else delete x.rooms;
-                  })}>
-                    <option value="">all rooms</option>
-                    <option value="others" disabled={!P.listed.length}>all but {listedName}</option>
-                    <option value="listed" disabled={!P.listed.length}>only {listedName}</option>
-                  </select>
-                  {' '}with <EventChips state={state} ids={l.eventIds} onChange={(ids) => setP((p) => { p.pills[pi].lines[li].eventIds = ids; })} />
-                  {!l.eventIds.length && <span className="muted small"> rooms at the pill's busiest slot</span>}
-                  <button className="chip-x" title="Remove line" onClick={() => setP((p) => { p.pills[pi].lines.splice(li, 1); })}>×</button>
-                </div>
-              ))}
-              <button onClick={() => setP((p) => { p.pills[pi].lines.push({ label: '', eventIds: [] }); })}>+ Add line</button>
-            </div>
-          )))}
-          <button onClick={() => { const np = newPill(`Proctors ${P.pills.length + 1}`, P.pills.at(-1)?.group ?? groups[0] ?? ''); setP((p) => { p.pills.push(np); }); setOpenId(np.id); }}>+ Add pill</button>
-          <details className="muted small pill-help"><summary>How pills count</summary>Each pill shows min · ideal at the busiest slot of its group's events in its time range (whole day by default), then one line per count: the rooms used by the line's events in that range, by room type, with their proctors. “Large (names)” counts as Large.</details>
-        </td></tr>
-        <tr><th>Note</th><td><textarea rows={2} value={P.note ?? ''} onChange={(e) => setP((p) => { if (e.target.value) p.note = e.target.value; else delete p.note; })} /></td></tr>
-      </tbody></table>}
+      </table>}
+      <p>
+        <button disabled={!types.length} onClick={() => add({ id: uid('sum'), kind: 'cap', label: 'New total', capType: 'base', types: [] })}>+ Capacity total</button>{' '}
+        <button disabled={!state.events.length} onClick={() => add({ id: uid('sum'), kind: 'event', label: state.events[0].name, eventId: state.events[0].id })}>+ Event total</button>{' '}
+        <button disabled={!state.phases.length} onClick={() => add({ id: uid('sum'), kind: 'proctors', label: phaseLabel([state.phases[0].id]), phaseIds: [state.phases[0].id], group: lastGroup })}>+ Proctors</button>
+      </p>
+      {rows.some((x) => x.kind === 'proctors') && <p>Proctors per room:{' '}
+        <span className="tags-cell">
+          {pills.map((p, i) => (
+            <span key={i} className="chip tag-chip proc-pill">
+              {capSelect(p.capType, (v) => setPills((a) => { a[i].capType = v; }), 'Capacity type')}
+              <input className="pill-name" value={p.name} size={Math.max(2, p.name.length)} placeholder="name" aria-label="Name shown after the number" title="Name shown after the number"
+                onChange={(e) => { const v = e.target.value; setPills((a) => { a[i].name = v; }); }} />
+              <button className="chip-x" title={`Remove ${p.name || 'pill'}`} onClick={() => setPills((a) => { a.splice(i, 1); })}>×</button></span>
+          ))}
+          <select value="" aria-label="Add a proctor pill" onChange={(e) => { const v = e.target.value; if (v) setPills((a) => { a.push({ capType: v, name: state.capTypes.find((c) => c.id === v)?.name ?? '' }); }); }}>
+            <option value="">+ pill</option>{state.capTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </span>
+        {' '}· list one by one, with editable counts:{' '}
+        <span className="tags-cell">
+          {(caps.listed ?? []).map((t) => (
+            <span key={t} className="chip tag-chip">{t}
+              <button className="chip-x" title={`Remove ${t}`} onClick={() => setListed((caps.listed ?? []).filter((z) => z !== t))}>×</button></span>
+          ))}
+          {types.some((t) => !caps.listed?.includes(t)) && <select value="" aria-label="List rooms of type one by one" onChange={(e) => { const v = e.target.value; if (v) setListed([...(caps.listed ?? []), v]); }}>
+            <option value="">+ type</option>{types.filter((t) => !caps.listed?.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>}
+        </span></p>}
     </>
   );
 }
