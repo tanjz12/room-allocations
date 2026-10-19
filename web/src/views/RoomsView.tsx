@@ -3,6 +3,8 @@ import { roomStatuses, textColor, roomTypes, roomActive, roomCapacity, ruleType,
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
+import type { DriveConfig, PackagePage } from '../lib/config';
+import { driveSignedIn, readSideJson, saveSideJson, type SideFile } from '../lib/drive';
 
 const SHEET_FILL = '#d9ead3';
 
@@ -141,6 +143,7 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
+      <PagePills pages={state.config.pages} drive={state.config.drive} />
 
       <div className="ctl-toggles">
         {([['types', 'Room types'], ['tags', 'Tags'], ['status', 'Room statuses']] as const).map(([k, label]) => (
@@ -324,4 +327,62 @@ export default function RoomsView({ state, update }: ViewProps) {
       </table>
     </div>
   );
+}
+
+/** Opens a package page in a new tab inside a sandboxed frame, so its scripts can't reach this site's storage or Google sign-in.
+ * A page with `driveFile` gets that JSON file (next to the open Drive package) handed in as `window.PACKAGE_HOST`,
+ * and its "page-host:save" messages are written back to that file by this site. */
+function openPage(p: PackagePage, drive?: DriveConfig) {
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.title = p.name;
+  w.document.body.textContent = 'Opening…';
+  void (async () => {
+    let html = p.html, ref: SideFile = {}, dirty = false;
+    const file = p.driveFile;
+    if (file) {
+      const why = !drive?.folderId ? 'To save to Drive, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then open this page again.'
+        : !driveSignedIn() ? 'To save to Drive, sign in with Google on the room allocation site, then open this page again.' : '';
+      const host: { file: string; canSave: boolean; why?: string; store?: unknown } = { file, canSave: !why, ...(why ? { why } : {}) };
+      if (!why) {
+        try { const r = await readSideJson(drive!, file); ref = r.ref; if (r.text) host.store = JSON.parse(r.text); }
+        catch (e) { host.canSave = false; host.why = `Couldn't open ${file} on Drive: ${e instanceof Error ? e.message : String(e)}`; }
+      }
+      const tag = `<script>window.PACKAGE_HOST=${JSON.stringify(host).replace(/</g, '\\u003c')};</script>`;
+      const head = /<head[^>]*>/i.exec(html);
+      html = head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
+    }
+    const inner = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const outer = `<!doctype html><meta charset="utf-8"><title>${esc(p.name)}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-popups allow-downloads" src="${inner}"></iframe>`;
+    w.document.open(); w.document.write(outer); w.document.close();
+    if (!file || !drive) return;
+    w.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+    w.addEventListener('message', async (e) => {
+      const d = e.data;
+      if (e.source !== w.frames[0] || !d || typeof d !== 'object') return;
+      if (d.type === 'page-host:dirty') { dirty = !!d.dirty; return; }
+      if (d.type !== 'page-host:save' || typeof d.json !== 'string') return;
+      const reply = (r: object) => (e.source as Window).postMessage({ type: 'page-host:saved', id: d.id, ...r }, '*');
+      if (!driveSignedIn()) { reply({ ok: false, error: 'Google sign-in on the room allocation site has expired. Export JSON here, sign in again there, reopen this page, Import JSON and save.' }); return; }
+      try {
+        const r = await saveSideJson(drive, file, d.json, ref, !!d.force);
+        if ('conflict' in r) reply({ ok: false, conflict: true });
+        else { ref = r; reply({ ok: true }); }
+      } catch (err) { reply({ ok: false, error: err instanceof Error ? err.message : String(err) }); }
+    });
+  })();
+}
+
+function PagePills({ pages, drive }: { pages?: PackagePage[]; drive?: DriveConfig }) {
+  if (!pages?.length) return null;
+  const groups = [...new Set(pages.map((p) => p.group))];
+  return (<>
+    {groups.map((g) => (
+      <div key={g} className="page-links">
+        <h3>{g}</h3>
+        <p>{pages.filter((p) => p.group === g).map((p, i) => <button key={i} className="font-pill" onClick={() => openPage(p, drive)}>{p.name}</button>)}</p>
+      </div>
+    ))}
+  </>);
 }

@@ -60,7 +60,11 @@ export type Config = {
   /** Folder generated maps were last saved to on Drive. */
   mapsFolder?: DriveFolder;
   signs?: SignConfig;
+  /** Standalone HTML pages carried in the package, shown as pills at the end of the capacity formulas, one heading per `group`. */
+  pages?: PackagePage[];
 };
+/** `driveFile`: JSON file next to the Drive package that the page loads and saves (through this site's Google sign-in). */
+export type PackagePage = { group: string; name: string; html: string; driveFile?: string };
 /** Room signs: `logo` is a PNG/JPEG data URL; `color` fills the room-number box. */
 /** Logo box in points: `logoSize` square, `logoX` its center from the left, `logoY` its top. */
 export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; boxStretch?: boolean; boxGap?: number; typst?: TypstConfig; font?: SignFontFile; numberFont?: SignFontFile };

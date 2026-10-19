@@ -346,6 +346,35 @@ export async function pickPackage(start?: string): Promise<{ state: State; saved
   return { state: { ...s, config } as State, savedAt: doc.savedAt ?? '' };
 }
 
+/** Signed in now, without sending the tab to Google's sign-in page. */
+export const driveSignedIn = () => !!token && token.exp > Date.now() + 60_000;
+
+/** A JSON file kept next to the data package, e.g. the seat planner's charts. */
+export type SideFile = { id?: string; modifiedTime?: string };
+async function findSide(folderId: string, name: string): Promise<SideFile | undefined> {
+  const query = `'${q(folderId)}' in parents and name = '${q(name)}' and trashed = false`;
+  const r = await api('GET', `/drive/v3/files?${ALL}&fields=files(id,modifiedTime)&q=${encodeURIComponent(query)}`);
+  return r.files?.[0];
+}
+/** The file's text, or null when it isn't on Drive yet. */
+export async function readSideJson(d: DriveConfig, name: string): Promise<{ text: string | null; ref: SideFile }> {
+  const f = await findSide(d.folderId, name);
+  if (!f?.id) return { text: null, ref: {} };
+  const r = await fetch(`${API}/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token?.t}` } });
+  if (!r.ok) throw new Error(`${driveAccount() || 'this Google account'} can't open ${name} (Google answered ${r.status})`);
+  return { text: await r.text(), ref: f };
+}
+/** Writes the file, unless someone else saved it after `ref` was read (then `conflict`, unless `force`). */
+export async function saveSideJson(d: DriveConfig, name: string, text: string, ref: SideFile, force: boolean): Promise<SideFile | { conflict: true }> {
+  const cur = await findSide(d.folderId, name);
+  if (!force && (cur?.modifiedTime ?? '') !== (ref.modifiedTime ?? '')) return { conflict: true };
+  const meta = cur?.id ? { name } : { name, mimeType: 'application/json', parents: [d.folderId] };
+  const b = `b${Math.random().toString(36).slice(2)}`;
+  const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`, text, `\r\n--${b}--`]);
+  const r = await api(cur?.id ? 'PATCH' : 'POST', `/upload/drive/v3/files${cur?.id ? `/${cur.id}` : ''}?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime`, body, `multipart/related; boundary=${b}`);
+  return { id: r.id, modifiedTime: r.modifiedTime };
+}
+
 /** Opens Google's picker for a folder, starting in `start`. Call straight from a click. */
 export async function pickFolder(title: string, start?: string): Promise<DriveFolder | null> {
   const f = await pickDrive(await accessToken(), 'folder', title, start);
