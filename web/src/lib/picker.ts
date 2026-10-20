@@ -49,3 +49,23 @@ export async function pickDrive(token: string, kind: 'file' | 'folder', title: s
       .build().setVisible(true);
   });
 }
+
+/** Picker for a folder and/or the files in it (multi-select, files visible): picked files are granted to the site individually. */
+export async function pickMany(token: string, title: string): Promise<PickerDoc[] | null> {
+  if (!PICKER_KEY) throw new Error('the Google file picker is not set up for this site');
+  await loadPicker();
+  const P = win().google.picker;
+  const view = new P.DocsView(P.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(true);
+  const shared = new P.DocsView(P.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(true).setEnableDrives(true);
+  return new Promise<PickerDoc[] | null>((ok) => {
+    new P.PickerBuilder()
+      .setOAuthToken(token).setDeveloperKey(PICKER_KEY).setAppId(APP_ID).setTitle(title)
+      .enableFeature(P.Feature.SUPPORT_DRIVES).enableFeature(P.Feature.MULTISELECT_ENABLED)
+      .addView(view).addView(shared)
+      .setCallback((d: PickerData) => {
+        if (d.action === P.Action.LOADED) return;
+        ok(d.action === P.Action.PICKED && d.docs?.length ? d.docs : null);
+      })
+      .build().setVisible(true);
+  });
+}
