@@ -348,6 +348,8 @@ export async function pickPackage(start?: string): Promise<{ state: State; saved
 
 /** Signed in now, without sending the tab to Google's sign-in page. */
 export const driveSignedIn = () => !!token && token.exp > Date.now() + 60_000;
+/** Current Drive access token (for pages that call the Drive API themselves, e.g. guts-sim.html). */
+export const driveToken = () => (driveSignedIn() ? token!.t : '');
 
 /** Opens Google's picker for a folder, starting in `start`. Call straight from a click. */
 export async function pickFolder(title: string, start?: string): Promise<DriveFolder | null> {
