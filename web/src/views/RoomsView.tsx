@@ -3,8 +3,8 @@ import { roomStatuses, textColor, roomTypes, roomActive, roomCapacity, ruleType,
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
-import type { DriveConfig, PackagePage } from '../lib/config';
-import { driveSignedIn, readSideJson, saveSideJson, type SideFile } from '../lib/drive';
+import type { PackagePage } from '../lib/config';
+import { driveSignedIn, readSideJson, saveSideJson, SIDE_DIR, type SideFile } from '../lib/drive';
 
 const SHEET_FILL = '#d9ead3';
 
@@ -143,7 +143,7 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
-      <PagePills pages={state.config.pages} drive={state.config.drive} />
+      <PagePills pages={state.config.pages} state={state} />
 
       <div className="ctl-toggles">
         {([['types', 'Room types'], ['tags', 'Tags'], ['status', 'Room statuses']] as const).map(([k, label]) => (
@@ -332,22 +332,37 @@ export default function RoomsView({ state, update }: ViewProps) {
 /** Opens a package page in a new tab inside a sandboxed frame, so its scripts can't reach this site's storage or Google sign-in.
  * A page with `driveFile` gets that JSON file (next to the open Drive package) handed in as `window.PACKAGE_HOST`,
  * and its "page-host:save" messages are written back to that file by this site. */
-function openPage(p: PackagePage, drive?: DriveConfig) {
+function openPage(p: PackagePage, state: State) {
+  const drive = state.config.drive;
   const w = window.open('', '_blank');
   if (!w) return;
   w.document.title = p.name;
   w.document.body.textContent = 'Opening…';
   void (async () => {
-    let html = p.html, ref: SideFile = {}, dirty = false;
-    const file = p.driveFile;
+    let html = p.html ?? '', ref: SideFile = {}, dirty = false;
+    if (p.htmlFile) {
+      const why = !drive?.folderId ? 'To open this page, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then click the pill again.'
+        : !driveSignedIn() ? 'To open this page, sign in with Google on the room allocation site, then click the pill again.' : '';
+      let err = why;
+      if (!why) {
+        try { const r = await readSideJson(drive!, p.htmlFile); if (r.text) html = r.text; else err = `${p.htmlFile} isn't in the "${SIDE_DIR}" folder next to the data package on Drive.`; }
+        catch (e) { err = `Couldn't open ${p.htmlFile} on Drive: ${e instanceof Error ? e.message : String(e)}`; }
+      }
+      if (err) { w.document.body.textContent = err; return; }
+    }
+    const file = p.driveFile, capRoom = p.capacity && state.rooms.find((r) => r.id === p.capacity!.room);
+    const capacity = capRoom && { room: capRoom.name, use: state.capTypes.find((c) => c.id === p.capacity!.use)?.name ?? p.capacity!.use, value: roomCapacity(state, capRoom, p.capacity!.use).value };
+    const host: { file?: string; canSave?: boolean; why?: string; store?: unknown; capacity?: typeof capacity } = capacity ? { capacity } : {};
     if (file) {
       const why = !drive?.folderId ? 'To save to Drive, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then open this page again.'
         : !driveSignedIn() ? 'To save to Drive, sign in with Google on the room allocation site, then open this page again.' : '';
-      const host: { file: string; canSave: boolean; why?: string; store?: unknown } = { file, canSave: !why, ...(why ? { why } : {}) };
+      Object.assign(host, { file, canSave: !why, ...(why ? { why } : {}) });
       if (!why) {
         try { const r = await readSideJson(drive!, file); ref = r.ref; if (r.text) host.store = JSON.parse(r.text); }
         catch (e) { host.canSave = false; host.why = `Couldn't open ${file} on Drive: ${e instanceof Error ? e.message : String(e)}`; }
       }
+    }
+    if (file || capacity) {
       const tag = `<script>window.PACKAGE_HOST=${JSON.stringify(host).replace(/</g, '\\u003c')};</script>`;
       const head = /<head[^>]*>/i.exec(html);
       html = head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
@@ -374,14 +389,14 @@ function openPage(p: PackagePage, drive?: DriveConfig) {
   })();
 }
 
-function PagePills({ pages, drive }: { pages?: PackagePage[]; drive?: DriveConfig }) {
+function PagePills({ pages, state }: { pages?: PackagePage[]; state: State }) {
   if (!pages?.length) return null;
   const groups = [...new Set(pages.map((p) => p.group))];
   return (<>
     {groups.map((g) => (
       <div key={g} className="page-links">
         <h3>{g}</h3>
-        <p>{pages.filter((p) => p.group === g).map((p, i) => <button key={i} className="font-pill" onClick={() => openPage(p, drive)}>{p.name}</button>)}</p>
+        <p>{pages.filter((p) => p.group === g).map((p, i) => <button key={i} className="font-pill" onClick={() => openPage(p, state)}>{p.name}</button>)}</p>
       </div>
     ))}
   </>);
