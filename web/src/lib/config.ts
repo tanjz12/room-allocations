@@ -64,9 +64,10 @@ export type Config = {
   pages?: PackagePage[];
 };
 /** `driveFile`: JSON file next to the Drive package that the page loads and saves (through this site's Google sign-in). */
-/** `capacity`: a room's capacity for one room use, computed from the current state and handed to the page when it opens. */
+/** `capacity`: a room's capacity for one room use (or a list of them), computed from the current state and handed to the page when it opens. */
 /** `saves`: the page can save its data (`data`, any JSON) into the package, which is then saved to Drive. */
-export type PackagePage = { group: string; name: string; html: string; saves?: boolean; data?: unknown; capacity?: { room: string; use: string } };
+export type PackagePage = { group: string; name: string; html: string; saves?: boolean; data?: unknown; capacity?: PageCapacity | PageCapacity[] };
+export type PageCapacity = { room: string; use: string };
 /** Room signs: `logo` is a PNG/JPEG data URL; `color` fills the room-number box. */
 /** Logo box in points: `logoSize` square, `logoX` its center from the left, `logoY` its top. */
 export type SignConfig = { logo?: string; footer?: string; heading?: string; color?: string; fileName?: string; driveFolder?: DriveFolder; logoSize?: number; logoX?: number; logoY?: number; boxStretch?: boolean; boxGap?: number; typst?: TypstConfig; font?: SignFontFile; numberFont?: SignFontFile };

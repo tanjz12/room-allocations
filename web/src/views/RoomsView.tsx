@@ -373,9 +373,13 @@ function openPage(p: PackagePage, i: number, state: State, savePage: SavePage) {
   const w = window.open('', '_blank');
   if (!w) return;
   let html = p.html, dirty = false;
-  const capRoom = p.capacity && state.rooms.find((r) => r.id === p.capacity!.room);
-  const capacity = capRoom && { room: capRoom.name, use: state.capTypes.find((c) => c.id === p.capacity!.use)?.name ?? p.capacity!.use, value: roomCapacity(state, capRoom, p.capacity!.use).value };
-  const host: { file?: string; canSave?: boolean; why?: string; store?: unknown; capacity?: typeof capacity } = capacity ? { capacity } : {};
+  const caps = (Array.isArray(p.capacity) ? p.capacity : p.capacity ? [p.capacity] : []).flatMap((pc) => {
+    const room = state.rooms.find((r) => r.id === pc.room);
+    return room ? [{ room: room.name, use: state.capTypes.find((c) => c.id === pc.use)?.name ?? pc.use, value: roomCapacity(state, room, pc.use).value }] : [];
+  });
+  const capacity = caps.length ? caps : undefined;
+  const host: { file?: string; canSave?: boolean; why?: string; store?: unknown; capacity?: (typeof caps)[number]; capacities?: typeof caps } =
+    !capacity ? {} : Array.isArray(p.capacity) ? { capacities: caps } : { capacity: caps[0] };
   if (p.saves) {
     const why = !drive?.fileId ? 'To save to Drive, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then open this page again.'
       : !driveSignedIn() ? 'To save to Drive, sign in with Google on the room allocation site, then open this page again.' : '';
