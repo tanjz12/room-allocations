@@ -25,7 +25,7 @@ export const roomTags = (s: State, r: Room) => {
 };
 /** `signName` overrides the event's sign label for this room only. */
 export type Block = { id: string; roomId: string; eventId: string; signName?: string };
-export type CapType = { id: string; name: string; formulas: Record<string, string> };
+export type CapType = { id: string; name: string; formulas: Record<string, string>; /** Set (even to null) by the data package to show "Min to add" for this type. */ addMin?: number | null };
 /** `eventIds` / `eventGroups`: count only rooms with one of these events (or an event in one of these groups) scheduled. */
 export type SummaryTotal = { id: string; label: string; tagId: string; capType: string; eventIds?: string[]; eventGroups?: string[] };
 export type State = { rooms: Room[]; events: EventT[]; categories: Category[]; typeTags: Record<string, string[]>; mapColors: MapColors; blocks: Block[]; capTypes: CapType[]; phases: Phase[]; summaryTotals: SummaryTotal[]; projectedIndiv?: number; config: Config; version?: number };

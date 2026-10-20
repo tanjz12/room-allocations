@@ -421,3 +421,8 @@ select.status-sel { border-radius: 10px; border: none; padding: 2px 6px; font-we
 .ctl-toggles { display: flex; gap: 24px; margin: 18px 0 8px; font-size: 1.15em; }
 .fit-w { width: fit-content; max-width: 100%; }
 .time-in { font: inherit; font-size: 13px; padding: 2px 4px; }
+
+.min-in { width: 5em; }
+.add-rooms td { background: #fafbfd; font-size: 13px; }
+.add-room { border: none; cursor: pointer; font: inherit; }
+.add-room:hover { background: #dfe7f3; }

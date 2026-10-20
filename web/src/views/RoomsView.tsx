@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { roomStatuses, textColor, roomTypes, roomActive, roomCapacity, ruleType, uid, type Category, type Room, type State, type Updater } from '../lib/model';
+import { Fragment, useState } from 'react';
+import { roomStatuses, textColor, roomTypes, roomActive, roomCapacity, roomEventsAt, overlaps, ruleType, uid, type CapType, type Category, type Room, type State, type Updater } from '../lib/model';
 import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
@@ -55,11 +55,39 @@ function TypeCell({ state, update, r, rules }: { state: State; update: Updater; 
   );
 }
 
+/** Pills for active rooms with at least `cap.addMin` capacity that are free for an event using `cap`; clicking one adds the event there. */
+function AddRooms({ state, update, cap, cols }: { state: State; update: Updater; cap: CapType; cols: number }) {
+  const min = cap.addMin ?? 0;
+  return (
+    <tr className="add-rooms"><td colSpan={cols}>
+      {state.events.filter((e) => e.capacityType === cap.id).map((ev) => {
+        const rooms = state.rooms
+          .map((r) => ({ r, v: roomCapacity(state, r, cap.id).value }))
+          .filter(({ r, v }) => roomActive(r) && v != null && v >= min
+            && !state.blocks.some((b) => b.roomId === r.id && b.eventId === ev.id)
+            && !roomEventsAt(state, r.id, null).some((x) => overlaps(x, ev)));
+        return (
+          <div key={ev.id}>
+            <span className="muted">Add {ev.name} to {cap.name} ≥ {min}: </span>
+            {rooms.length ? rooms.map(({ r, v }) => (
+              <button key={r.id} className="chip add-room" title={`Add ${ev.name} to ${r.name}`}
+                onClick={() => update((d) => { d.blocks.push({ id: uid('b'), roomId: r.id, eventId: ev.id }); })}>
+                + {r.name} <span className="muted">{v}</span>
+              </button>
+            )) : <span className="muted">none; every such room already has {ev.name} or is busy then.</span>}
+          </div>
+        );
+      })}
+    </td></tr>
+  );
+}
+
 export default function RoomsView({ state, update, savePage }: ViewProps & { savePage: SavePage }) {
   const [newCap, setNewCap] = useState('');
   const [msg, setMsg] = useState('');
   const types = roomTypes(state);
   const editable = state.capTypes.filter((c) => c.id !== 'base');
+  const hasMin = editable.some((c) => c.addMin !== undefined);
   const setCat = (id: string, patch: Partial<Category>) =>
     update((d) => { Object.assign(d.categories.find((c) => c.id === id)!, patch); });
   const tagIdsOf = (t: string) => state.typeTags[t] ?? [];
@@ -123,22 +151,28 @@ export default function RoomsView({ state, update, savePage }: ViewProps & { sav
         Leave blank for no formula. A value typed into a room cell below overrides the formula for that room.
       </p>
       <table className="table formulas">
-        <thead><tr><th>Capacity type</th><th>id</th>{types.map((t) => <th key={t}>{t}</th>)}<th></th></tr></thead>
+        <thead><tr><th>Capacity type</th><th>id</th>{types.map((t) => <th key={t}>{t}</th>)}{hasMin && <th title="Lists rooms with at least this capacity that don't have the event yet">Min to add</th>}<th></th></tr></thead>
         <tbody>
           {editable.map((c) => (
-            <tr key={c.id}>
+            <Fragment key={c.id}>
+            <tr>
               <td><input value={c.name} onChange={(e) => update((d) => { d.capTypes.find((x) => x.id === c.id)!.name = e.target.value; })} /></td>
               <td><code>{c.id}</code></td>
               {types.map((t) => (
                 <td key={t}><input className="mono" value={c.formulas[t] ?? ''} placeholder="—"
                   onChange={(e) => update((d) => { d.capTypes.find((x) => x.id === c.id)!.formulas[t] = e.target.value; })} /></td>
               ))}
+              {hasMin && <td>{c.addMin !== undefined && <input type="number" className="min-in" value={c.addMin ?? ''} placeholder="—" aria-label={`${c.name} min to add`}
+                disabled={!state.events.some((e) => e.capacityType === c.id)} title={state.events.some((e) => e.capacityType === c.id) ? `Rooms with at least this ${c.name} capacity can be added to its event` : `No event uses ${c.name}`}
+                onChange={(e) => { const v = e.target.value; update((d) => { const x = d.capTypes.find((y) => y.id === c.id)!; x.addMin = v === '' ? null : Number(v); }); }} />}</td>}
               <td><button className="danger" onClick={() => {
                 if (state.events.some((e) => e.capacityType === c.id)) return setMsg(`Events still use ${c.name}; change their capacity type first.`);
                 if (state.config.summary?.some((x) => x.kind === 'cap' && x.capType === c.id) || state.config.proctorCaps?.pills?.some((p) => p.capType === c.id)) return setMsg(`The summary still uses ${c.name}; change it under Edit summary on Schedule first.`);
                 update((d) => { d.capTypes = d.capTypes.filter((x) => x.id !== c.id); d.rooms.forEach((r) => delete r.overrides[c.id]); });
               }}>Delete</button></td>
             </tr>
+            {c.addMin != null && <AddRooms state={state} update={update} cap={c} cols={types.length + (hasMin ? 4 : 3)} />}
+            </Fragment>
           ))}
         </tbody>
       </table>
