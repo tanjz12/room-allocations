@@ -1,4 +1,6 @@
-import { driveAccount, driveSignedIn, driveToken, finishSignIn, signInDrive } from './lib/drive';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/700.css';
+import { driveAccount, driveSignedIn, driveToken, finishSignIn, signInDrive, signOutDrive } from './lib/drive';
 import { pickHtml } from './lib/picker';
 
 // Public shell: the simulator lives in one Drive file, guts-seating-simulator.html, which the visitor picks once in
@@ -8,6 +10,19 @@ const API = 'https://www.googleapis.com';
 const RUNS_RE = /<script type="application\/json" id="guts-runs">([\s\S]*?)<\/script>/;
 type DFile = { id: string; name: string; modifiedTime: string };
 const $ = (id: string) => document.getElementById(id)!;
+let onMsg: ((e: MessageEvent) => void) | null = null;
+
+function signOut() {
+  signOutDrive();
+  localStorage.removeItem(FILE_KEY);
+  if (onMsg) removeEventListener('message', onMsg);
+  onMsg = null;
+  const frame = $('sim') as HTMLIFrameElement;
+  frame.style.display = 'none'; frame.srcdoc = ''; $('gate').style.display = '';
+  gate(INTRO, [['Sign in with Google', () => void signInDrive()]]);
+}
+const OUT: [string, () => void] = ['Sign out', signOut];
+const INTRO = 'Sign in with Google so saved runs are kept in Drive and\ncan be reused next time.';
 
 function gate(msg: string, buttons: [string, () => void][]) {
   $('msg').textContent = msg;
@@ -34,7 +49,7 @@ async function pick() {
 
 async function open() {
   const saved = JSON.parse(localStorage.getItem(FILE_KEY) ?? 'null') as { id: string; name: string } | null;
-  if (!saved) return gate(`Signed in as ${driveAccount()}. `, [['Open Google file picker', () => void pick()]]);
+  if (!saved) return gate(`Signed in as ${driveAccount()}. `, [['Open Google file picker', () => void pick()], OUT]);
   gate(`Loading ${saved.name}…`, []);
   try {
     let file = await meta(saved.id);
@@ -43,8 +58,10 @@ async function open() {
     const inject = `<script>window.PACKAGE_HOST=${JSON.stringify(host).replace(/</g, '\\u003c')};</script>`;
     const doctype = /^\s*<!doctype[^>]*>/i.exec(src)?.[0] ?? '';
     const frame = $('sim') as HTMLIFrameElement;
-    addEventListener('message', async e => {
+    if (onMsg) removeEventListener('message', onMsg);
+    onMsg = async (e: MessageEvent) => {
       if (e.source !== frame.contentWindow) return;
+      if (e.data?.type === 'page-host:signout') return signOut();
       const d = e.data, reply = (r: object) => frame.contentWindow!.postMessage({ type: d?.type === 'page-host:load' ? 'page-host:loaded' : 'page-host:saved', id: d.id, ...r }, '*');
       try {
         if (d?.type === 'page-host:load') {
@@ -61,16 +78,17 @@ async function open() {
           reply({ ok: true });
         }
       } catch (err) { reply({ ok: false, error: (err as Error).message }); }
-    });
+    };
+    addEventListener('message', onMsg);
     frame.srcdoc = doctype + inject + src.slice(doctype.length); frame.style.display = 'block'; $('gate').style.display = 'none';
   } catch (err) {
-    gate((err as Error).message, [['Try again', () => void open()], ['Open Google file picker', () => void pick()]]);
+    gate((err as Error).message, [['Try again', () => void open()], ['Open Google file picker', () => void pick()], OUT]);
   }
 }
 
 (async () => {
   const back = finishSignIn();
   if (back) { try { await back; } catch (err) { return gate((err as Error).message, [['Sign in with Google', () => void signInDrive()]]); } }
-  if (!driveSignedIn()) return gate('', [['Sign in with Google', () => void signInDrive()]]);
+  if (!driveSignedIn()) return gate(INTRO, [['Sign in with Google', () => void signInDrive()]]);
   void open();
 })();
