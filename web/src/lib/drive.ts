@@ -25,12 +25,17 @@ const STATE_KEY = 'room-alloc-oauth-state';
 let token: { t: string; exp: number; email: string } | null = (() => {
   try { const x = JSON.parse(localStorage.getItem(TOKEN_KEY) ?? 'null'); return x && x.exp > Date.now() ? x : null; } catch { return null; }
 })();
-const redirectUri = () => location.origin + location.pathname;
+const RETURN_KEY = 'room-alloc-oauth-return';
+/** The OAuth client only allows the site's root as the return address; other pages (guts-sim.html) are bounced back to from there. */
+const redirectUri = () => location.origin + location.pathname.replace(/[^/]*$/, '');
 
 /** Result of coming back from Google's sign-in page (read once, then removed from the address bar). */
 let returned: { error?: string; pending?: Promise<string> } | null = (() => {
   const p = new URLSearchParams(location.hash.slice(1));
   if (!p.has('access_token') && !p.has('error')) return null;
+  const back = sessionStorage.getItem(RETURN_KEY);
+  sessionStorage.removeItem(RETURN_KEY);
+  if (back && back !== location.pathname) { location.replace(back + location.search + location.hash); return null; }
   const expected = sessionStorage.getItem(STATE_KEY);
   sessionStorage.removeItem(STATE_KEY);
   history.replaceState(null, '', location.pathname + location.search);
@@ -57,6 +62,7 @@ export function signInDrive(): Promise<never> {
   if (!CLIENT_ID) return Promise.reject(new Error('Google sign-in is not set up for this site'));
   const state = crypto.randomUUID();
   sessionStorage.setItem(STATE_KEY, state);
+  sessionStorage.setItem(RETURN_KEY, location.pathname);
   const q = new URLSearchParams({
     client_id: CLIENT_ID, redirect_uri: redirectUri(), response_type: 'token', scope: SCOPE,
     state, prompt: 'select_account',
