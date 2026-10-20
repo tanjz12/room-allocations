@@ -4,7 +4,7 @@ import { ConfirmButton, type ViewProps } from './common';
 import ColorPicker from './ColorPicker';
 import { usedColors, defaultColor } from '../lib/colors';
 import type { PackagePage } from '../lib/config';
-import { driveSignedIn, readSideJson, saveSideJson, SIDE_DIR, type SideFile } from '../lib/drive';
+import { driveSignedIn } from '../lib/drive';
 
 const SHEET_FILL = '#d9ead3';
 
@@ -55,7 +55,7 @@ function TypeCell({ state, update, r, rules }: { state: State; update: Updater; 
   );
 }
 
-export default function RoomsView({ state, update }: ViewProps) {
+export default function RoomsView({ state, update, savePage }: ViewProps & { savePage: SavePage }) {
   const [newCap, setNewCap] = useState('');
   const [msg, setMsg] = useState('');
   const types = roomTypes(state);
@@ -143,7 +143,7 @@ export default function RoomsView({ state, update }: ViewProps) {
         </tbody>
       </table>
       <p><input value={newCap} placeholder="New capacity type name" onChange={(e) => setNewCap(e.target.value)} /> <button onClick={addCap}>+ Add capacity type</button>{msg && <span className="warn"> {msg}</span>}</p>
-      <PagePills pages={state.config.pages} state={state} />
+      <PagePills pages={state.config.pages} state={state} savePage={savePage} />
 
       <div className="ctl-toggles">
         {([['types', 'Room types'], ['tags', 'Tags'], ['status', 'Room statuses']] as const).map(([k, label]) => (
@@ -332,71 +332,54 @@ export default function RoomsView({ state, update }: ViewProps) {
 /** Opens a package page in a new tab inside a sandboxed frame, so its scripts can't reach this site's storage or Google sign-in.
  * A page with `driveFile` gets that JSON file (next to the open Drive package) handed in as `window.PACKAGE_HOST`,
  * and its "page-host:save" messages are written back to that file by this site. */
-function openPage(p: PackagePage, state: State) {
+export type SavePage = (i: number, data: unknown, force: boolean) => Promise<{ ok: true } | { conflict: true } | { error: string }>;
+
+function openPage(p: PackagePage, i: number, state: State, savePage: SavePage) {
   const drive = state.config.drive;
   const w = window.open('', '_blank');
   if (!w) return;
-  w.document.title = p.name;
-  w.document.body.textContent = 'Opening…';
-  void (async () => {
-    let html = p.html ?? '', ref: SideFile = {}, dirty = false;
-    if (p.htmlFile) {
-      const why = !drive?.folderId ? 'To open this page, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then click the pill again.'
-        : !driveSignedIn() ? 'To open this page, sign in with Google on the room allocation site, then click the pill again.' : '';
-      let err = why;
-      if (!why) {
-        try { const r = await readSideJson(drive!, p.htmlFile); if (r.text) html = r.text; else err = `${p.htmlFile} isn't in the "${SIDE_DIR}" folder next to the data package on Drive.`; }
-        catch (e) { err = `Couldn't open ${p.htmlFile} on Drive: ${e instanceof Error ? e.message : String(e)}`; }
-      }
-      if (err) { w.document.body.textContent = err; return; }
-    }
-    const file = p.driveFile, capRoom = p.capacity && state.rooms.find((r) => r.id === p.capacity!.room);
-    const capacity = capRoom && { room: capRoom.name, use: state.capTypes.find((c) => c.id === p.capacity!.use)?.name ?? p.capacity!.use, value: roomCapacity(state, capRoom, p.capacity!.use).value };
-    const host: { file?: string; canSave?: boolean; why?: string; store?: unknown; capacity?: typeof capacity } = capacity ? { capacity } : {};
-    if (file) {
-      const why = !drive?.folderId ? 'To save to Drive, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then open this page again.'
-        : !driveSignedIn() ? 'To save to Drive, sign in with Google on the room allocation site, then open this page again.' : '';
-      Object.assign(host, { file, canSave: !why, ...(why ? { why } : {}) });
-      if (!why) {
-        try { const r = await readSideJson(drive!, file); ref = r.ref; if (r.text) host.store = JSON.parse(r.text); }
-        catch (e) { host.canSave = false; host.why = `Couldn't open ${file} on Drive: ${e instanceof Error ? e.message : String(e)}`; }
-      }
-    }
-    if (file || capacity) {
-      const tag = `<script>window.PACKAGE_HOST=${JSON.stringify(host).replace(/</g, '\\u003c')};</script>`;
-      const head = /<head[^>]*>/i.exec(html);
-      html = head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
-    }
-    const inner = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-    const outer = `<!doctype html><meta charset="utf-8"><title>${esc(p.name)}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-popups allow-downloads" src="${inner}"></iframe>`;
-    w.document.open(); w.document.write(outer); w.document.close();
-    if (!file || !drive) return;
-    w.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-    w.addEventListener('message', async (e) => {
-      const d = e.data;
-      if (e.source !== w.frames[0] || !d || typeof d !== 'object') return;
-      if (d.type === 'page-host:dirty') { dirty = !!d.dirty; return; }
-      if (d.type !== 'page-host:save' || typeof d.json !== 'string') return;
-      const reply = (r: object) => (e.source as Window).postMessage({ type: 'page-host:saved', id: d.id, ...r }, '*');
-      if (!driveSignedIn()) { reply({ ok: false, error: 'Google sign-in on the room allocation site has expired. Export JSON here, sign in again there, reopen this page, Import JSON and save.' }); return; }
-      try {
-        const r = await saveSideJson(drive, file, d.json, ref, !!d.force);
-        if ('conflict' in r) reply({ ok: false, conflict: true });
-        else { ref = r; reply({ ok: true }); }
-      } catch (err) { reply({ ok: false, error: err instanceof Error ? err.message : String(err) }); }
-    });
-  })();
+  let html = p.html, dirty = false;
+  const capRoom = p.capacity && state.rooms.find((r) => r.id === p.capacity!.room);
+  const capacity = capRoom && { room: capRoom.name, use: state.capTypes.find((c) => c.id === p.capacity!.use)?.name ?? p.capacity!.use, value: roomCapacity(state, capRoom, p.capacity!.use).value };
+  const host: { file?: string; canSave?: boolean; why?: string; store?: unknown; capacity?: typeof capacity } = capacity ? { capacity } : {};
+  if (p.saves) {
+    const why = !drive?.fileId ? 'To save to Drive, open the data package from Drive on the room allocation site (More ▾ → Open from Drive…), then open this page again.'
+      : !driveSignedIn() ? 'To save to Drive, sign in with Google on the room allocation site, then open this page again.' : '';
+    Object.assign(host, { file: drive?.jsonName || 'the data package', canSave: !why, ...(why ? { why } : {}), ...(p.data !== undefined ? { store: p.data } : {}) });
+  }
+  if (p.saves || capacity) {
+    const tag = `<script>window.PACKAGE_HOST=${JSON.stringify(host).replace(/</g, '\\u003c')};</script>`;
+    const head = /<head[^>]*>/i.exec(html);
+    html = head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
+  }
+  const inner = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const outer = `<!doctype html><meta charset="utf-8"><title>${esc(p.name)}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-popups allow-downloads" src="${inner}"></iframe>`;
+  w.document.open(); w.document.write(outer); w.document.close();
+  if (!p.saves || !host.canSave) return;
+  w.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  w.addEventListener('message', async (e) => {
+    const d = e.data;
+    if (e.source !== w.frames[0] || !d || typeof d !== 'object') return;
+    if (d.type === 'page-host:dirty') { dirty = !!d.dirty; return; }
+    if (d.type !== 'page-host:save' || typeof d.json !== 'string') return;
+    const reply = (r: object) => (e.source as Window).postMessage({ type: 'page-host:saved', id: d.id, ...r }, '*');
+    if (!driveSignedIn()) { reply({ ok: false, error: 'Google sign-in on the room allocation site has expired. Export JSON here, sign in again there, reopen this page, Import JSON and save.' }); return; }
+    try {
+      const r = await savePage(i, JSON.parse(d.json), !!d.force);
+      reply('ok' in r ? { ok: true } : 'conflict' in r ? { ok: false, conflict: true } : { ok: false, error: r.error });
+    } catch (err) { reply({ ok: false, error: err instanceof Error ? err.message : String(err) }); }
+  });
 }
 
-function PagePills({ pages, state }: { pages?: PackagePage[]; state: State }) {
+function PagePills({ pages, state, savePage }: { pages?: PackagePage[]; state: State; savePage: SavePage }) {
   if (!pages?.length) return null;
   const groups = [...new Set(pages.map((p) => p.group))];
   return (<>
     {groups.map((g) => (
       <div key={g} className="page-links">
         <h3>{g}</h3>
-        <p>{pages.filter((p) => p.group === g).map((p, i) => <button key={i} className="font-pill" onClick={() => openPage(p, state)}>{p.name}</button>)}</p>
+        <p>{pages.map((p, i) => p.group === g && <button key={i} className="font-pill" onClick={() => openPage(p, i, state, savePage)}>{p.name}</button>)}</p>
       </div>
     ))}
   </>);

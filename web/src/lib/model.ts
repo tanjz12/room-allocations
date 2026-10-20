@@ -198,7 +198,7 @@ export function useAppState() {
     } catch { /* fall through */ }
     return initialState();
   });
-  useEffect(() => { if (state.version) localStorage.setItem(KEY, JSON.stringify(state)); }, [state]);
+  useEffect(() => { if (state.version) try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* over the browser's storage limit: the state lives on in memory and on Drive */ } }, [state]);
   const update = (fn: (draft: State) => void) =>
     setState((prev) => { const d = structuredClone(prev); fn(d); applyTypeRules(d); mergeLegendExtras(d.config); return d; });
   return { state, setState, update };

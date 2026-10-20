@@ -4,7 +4,7 @@ import { DEFAULT_TITLE, headerPrefix } from './lib/config';
 import Schedule from './views/Schedule';
 import CapacityView from './views/CapacityView';
 import EventsView from './views/EventsView';
-import RoomsView from './views/RoomsView';
+import RoomsView, { type SavePage } from './views/RoomsView';
 import MapView from './views/MapView';
 import ExportView from './views/ExportView';
 import { ConfirmButton } from './views/common';
@@ -56,6 +56,23 @@ export default function App() {
         if (sheetId && sheetId !== state.config.drive?.sheetId) setState((x) => (x.config.drive ? { ...x, config: { ...x.config, drive: { ...x.config.drive, sheetId } } } : x));
         setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {}); }
     } catch (e) { fail(e); }
+  };
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+  const savePage: SavePage = async (i, data, force) => {
+    const s = structuredClone(stateRef.current), page = s.config.pages?.[i];
+    if (!page) return { error: 'This page is no longer in the data package.' };
+    page.data = data;
+    stateRef.current = s; setState(s); markDirty();
+    setDrive({ busy: 'Saving…' });
+    try {
+      const r = await saveDrive(s, metaRef.current.savedAt, force);
+      setAccount(driveAccount());
+      if ('conflict' in r) { setDrive({ conflict: r.conflict }); return { conflict: true }; }
+      if (r.sheetId && r.sheetId !== s.config.drive?.sheetId) setState((x) => (x.config.drive ? { ...x, config: { ...x.config, drive: { ...x.config.drive, sheetId: r.sheetId } } } : x));
+      setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {});
+      return { ok: true };
+    } catch (e) { fail(e); return { error: e instanceof Error ? e.message : String(e) }; }
   };
   const clearAll = () => { setState(initialState()); setMeta({ savedAt: '', dirty: false }); setDrive({}); };
   useEffect(() => {
@@ -194,7 +211,7 @@ export default function App() {
         {tab === 'Capacity breakdown' && <CapacityView {...props} />}
         {tab === 'Floor plans' && <MapView {...props} />}
         {tab === 'Events' && <EventsView {...props} />}
-        {tab === 'Rooms' && <RoomsView {...props} />}
+        {tab === 'Rooms' && <RoomsView {...props} savePage={savePage} />}
         {tab === 'Maps & Room signs' && <ExportView {...props} />}
       </main>
       <footer className="site-foot">
