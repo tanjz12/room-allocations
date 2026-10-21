@@ -447,3 +447,4 @@ select.status-sel { border-radius: 10px; border: none; padding: 2px 6px; font-we
   .schedule-view .toolbar .hint-short { display: inline; }
 }
 .formulas .empty-col input { width: 4em; }
+.formulas td:first-child input { width: 9em; }
