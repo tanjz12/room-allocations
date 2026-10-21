@@ -435,3 +435,14 @@ select.status-sel { border-radius: 10px; border: none; padding: 2px 6px; font-we
 .activity-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .activity-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid #eee; vertical-align: top; }
 .activity-table .when, .activity-table .by { white-space: nowrap; color: #666; }
+
+.hint-short { display: none; }
+@media (max-width: 600px) {
+  .schedule-view .toolbar { gap: 4px 10px; padding: 6px 10px; }
+  .schedule-view .toolbar .tb-lbl { display: none; }
+  .schedule-view .toolbar label:first-child select { max-width: 58vw; }
+  .schedule-view .toolbar label:last-child select { max-width: 28vw; }
+  .schedule-view .toolbar .hint { order: 9; flex-basis: 100%; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .schedule-view .toolbar .hint-long { display: none; }
+  .schedule-view .toolbar .hint-short { display: inline; }
+}

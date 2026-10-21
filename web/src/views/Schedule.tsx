@@ -39,8 +39,8 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
       <Summary state={state} update={update} setTime={setTime} />
       <div className="sched-main">
       <div className="toolbar">
-        <label>Place event:&nbsp;
-          <select value={paint} onChange={(e) => setPaint(e.target.value)}>
+        <label><span className="tb-lbl">Place event:&nbsp;</span>
+          <select aria-label="Place event" value={paint} onChange={(e) => setPaint(e.target.value)}>
             {groupedEvents(state).map(({ group, events }) => (
               <optgroup key={group} label={group}>
                 {events.map((e) => <option key={e.id} value={e.id}>{e.name} ({fmtTime(e.start)}–{fmtTime(e.end)})</option>)}
@@ -49,9 +49,9 @@ export default function Schedule({ state, update, time, setTime }: ViewProps) {
           </select>
         </label>
         {paintEv && <Swatch color={paintEv.color} />}
-        {clashMsg ? <span className="hint warn">{clashMsg}</span> : <span className="hint">Click a room column to add the selected event; hover a block and click × to delete it. Click a time to select it.</span>}
-        <label>Building:&nbsp;
-          <select value={building} onChange={(e) => setBuilding(e.target.value)}>
+        {clashMsg ? <span className="hint warn">{clashMsg}</span> : <span className="hint"><span className="hint-long">Click a room column to add the selected event; hover a block and click × to delete it. Click a time to select it.</span><span className="hint-short">Tap a room to add · tap a block, then × to delete</span></span>}
+        <label><span className="tb-lbl">Building:&nbsp;</span>
+          <select aria-label="Building" value={building} onChange={(e) => setBuilding(e.target.value)}>
             {buildings.map((b) => <option key={b}>{b}</option>)}
           </select>
         </label>
