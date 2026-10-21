@@ -88,6 +88,7 @@ export default function RoomsView({ state, update, savePage }: ViewProps & { sav
   const types = roomTypes(state);
   const editable = state.capTypes.filter((c) => c.id !== 'base');
   const hasMin = editable.some((c) => c.addMin !== undefined);
+  const noFormula = (t: string) => editable.every((c) => !(c.formulas[t] ?? '').trim());
   const setCat = (id: string, patch: Partial<Category>) =>
     update((d) => { Object.assign(d.categories.find((c) => c.id === id)!, patch); });
   const tagIdsOf = (t: string) => state.typeTags[t] ?? [];
@@ -151,7 +152,7 @@ export default function RoomsView({ state, update, savePage }: ViewProps & { sav
         Leave blank for no formula. A value typed into a room cell below overrides the formula for that room.
       </p>
       <table className="table formulas">
-        <thead><tr><th>Capacity type</th><th>id</th>{types.map((t) => <th key={t}>{t}</th>)}{hasMin && <th title="Lists rooms with at least this capacity that don't have the event yet">Min to add</th>}<th></th></tr></thead>
+        <thead><tr><th>Capacity type</th><th>id</th>{types.map((t) => <th key={t} className={noFormula(t) ? 'empty-col' : undefined}>{t}</th>)}{hasMin && <th title="Lists rooms with at least this capacity that don't have the event yet">Min to add</th>}<th></th></tr></thead>
         <tbody>
           {editable.map((c) => (
             <Fragment key={c.id}>
@@ -159,7 +160,7 @@ export default function RoomsView({ state, update, savePage }: ViewProps & { sav
               <td><input value={c.name} onChange={(e) => update((d) => { d.capTypes.find((x) => x.id === c.id)!.name = e.target.value; })} /></td>
               <td><code>{c.id}</code></td>
               {types.map((t) => (
-                <td key={t}><input className="mono" value={c.formulas[t] ?? ''} placeholder="—"
+                <td key={t} className={noFormula(t) ? 'empty-col' : undefined}><input className="mono" value={c.formulas[t] ?? ''} placeholder="—"
                   onChange={(e) => update((d) => { d.capTypes.find((x) => x.id === c.id)!.formulas[t] = e.target.value; })} /></td>
               ))}
               {hasMin && <td>{c.addMin !== undefined && <input type="number" className="min-in" value={c.addMin ?? ''} placeholder="—" aria-label={`${c.name} min to add`}

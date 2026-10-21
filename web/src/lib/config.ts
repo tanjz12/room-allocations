@@ -43,7 +43,9 @@ export const DEFAULT_ROOM_STATUSES: RoomStatus[] = [
 ];
 
 export type Config = {
-  title: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
+  title: string;
+  /** Activity-log web app (Apps Script `doPost`, run by the package owner) that keeps visits in one file next to the package. */
+  visitLog?: string; roomTypes: string[]; eventGroups: string[]; eventOrder: string[];
   subgroup?: Subgroup; highlight?: Highlight; summary?: SummaryRow[]; proctorCaps?: { pills?: ProctorCapPill[]; listed?: string[] };
   /** Old packages only; turned into `summary` when opened. */
   summaryEventIds?: string[]; proctors?: Proctors; sameColors?: SameColor[]; colorOptions?: ColorOption[];

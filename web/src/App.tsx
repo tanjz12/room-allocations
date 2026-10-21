@@ -31,7 +31,7 @@ export default function App() {
   const edit: typeof update = (fn) => { const by = driveAccount() || 'this browser'; update((d) => { const before = snapshot(d); fn(d); record(d, describe(before, snapshot(d)), by); }); markDirty(); };
   const [showActivity, setShowActivity] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
-  const folderId = state.config.drive?.folderId, jsonName = state.config.drive?.jsonName;
+  const visitLog = state.config.visitLog;
   useEffect(() => {
     const m = mainRef.current;
     if (!m) return;
@@ -45,11 +45,11 @@ export default function App() {
     const next = normalize(s.config ? s : { ...s, config: state.config });
     setState(next);
     setMeta({ savedAt, dirty: false });
-    logVisit(next.config.drive, 'opened the package');
+    logVisit(next.config.visitLog, 'opened the package');
     setDrive({});
   };
   const [account, setAccount] = useState(driveAccount);
-  useEffect(() => { if (folderId && jsonName) logVisit({ folderId, jsonName }, `viewed ${tab}`); }, [tab, folderId, jsonName, account]);
+  useEffect(() => { logVisit(visitLog, `viewed ${tab}`); }, [tab, visitLog, account]);
   const fail = (e: unknown) => setDrive({ err: `Drive: ${e instanceof Error ? e.message : e}` });
   const loadFromDrive = async () => {
     setDrive({ busy: 'Loading…' });
@@ -69,7 +69,7 @@ export default function App() {
       else {
         const sheetId = r.sheetId;
         if (sheetId && sheetId !== state.config.drive?.sheetId) setState((x) => (x.config.drive ? { ...x, config: { ...x.config, drive: { ...x.config.drive, sheetId } } } : x));
-        setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {}); logVisit(state.config.drive, 'saved to Drive'); }
+        setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {}); logVisit(state.config.visitLog, 'saved to Drive'); }
     } catch (e) { fail(e); }
   };
   const stateRef = useRef(state);

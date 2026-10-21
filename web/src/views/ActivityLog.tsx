@@ -8,8 +8,8 @@ const when = (iso: string) => new Date(iso).toLocaleString([], { month: 'short',
 export default function ActivityLog({ state, onClose }: { state: State; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | 'edit' | 'visit'>('all');
-  const [visits, setVisits] = useState<Visit[] | string>(driveSignedIn() && state.config.drive?.folderId ? 'Loading visits…' : 'Sign in with Google to see visits.');
-  useEffect(() => { if (typeof visits === 'string' && visits.startsWith('Loading')) readVisits(state).then(setVisits, () => setVisits("Couldn't read the visit log on Drive.")); }, [state, visits]);
+  const [visits, setVisits] = useState<Visit[] | string>(!state.config.visitLog ? 'Visits aren\'t set up for this package yet.' : driveSignedIn() ? 'Loading visits…' : 'Sign in with Google to see visits.');
+  useEffect(() => { if (typeof visits === 'string' && visits.startsWith('Loading')) readVisits(state).then(setVisits, () => setVisits("Couldn't read the visit log.")); }, [state, visits]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; addEventListener('keydown', k); return () => removeEventListener('keydown', k); }, [onClose]);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   type Row = Activity & { visit?: boolean };
@@ -24,7 +24,7 @@ export default function ActivityLog({ state, onClose }: { state: State; onClose:
           <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}><option value="all">Edits and visits</option><option value="edit">Edits</option><option value="visit">Visits</option></select>
           <button className="close" onClick={onClose}>Close</button>
         </div>
-        <p className="hint">Newest first. Edits (site and Sheet sync) are kept in the data package when someone clicks Save to Drive. Visits, tab views and saves by people signed in with Google go straight to a log file next to the package.{typeof visits === 'string' && kind !== 'edit' ? ` ${visits}` : ''}</p>
+        <p className="hint">Newest first. Edits (site and Sheet sync) are kept in the data package when someone clicks Save to Drive. Visits, tab views and saves by people signed in with Google go to a log file next to the package.{typeof visits === 'string' && kind !== 'edit' ? ` ${visits}` : ''}</p>
         {rows.length ? (
           <table className="activity-table">
             <tbody>
