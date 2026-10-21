@@ -413,3 +413,41 @@ export async function saveMaps(folder: DriveFolder, files: { dir: string; name: 
   }
   return `https://drive.google.com/drive/folders/${folder.id}`;
 }
+
+/** Visits, tab views and saves go to a small JSON file next to the package (not the package itself), written right away. */
+export type Visit = { at: string; by: string; text: string };
+type VisitFile = Pick<DriveConfig, 'folderId' | 'jsonName'>;
+const visitName = (d: VisitFile) => `${d.jsonName.replace(/\.json$/i, '')} activity log.json`;
+let visitQueue: { d: VisitFile; v: Visit }[] = [];
+let visitTimer: ReturnType<typeof setTimeout> | undefined;
+const lastVisit = new Map<string, number>();
+export function logVisit(d: VisitFile | undefined, text: string) {
+  if (!d?.folderId || !driveSignedIn()) return;
+  const by = driveAccount(), now = Date.now(), k = `${d.folderId}|${by}|${text}`;
+  if (now - (lastVisit.get(k) ?? 0) < 2 * 60_000) return;
+  lastVisit.set(k, now);
+  visitQueue.push({ d, v: { at: new Date(now).toISOString(), by, text } });
+  clearTimeout(visitTimer);
+  visitTimer = setTimeout(() => void flushVisits(), 3000);
+}
+async function flushVisits() {
+  const q = visitQueue; visitQueue = [];
+  for (const d of new Map(q.map((x) => [x.d.folderId + x.d.jsonName, x.d])).values()) {
+    try {
+      const add = q.filter((x) => x.d.folderId === d.folderId && x.d.jsonName === d.jsonName).map((x) => x.v);
+      const all = [...(await readVisitFile(d)), ...add].slice(-5000);
+      await upload(d.folderId, visitName(d), 'application/json', new Blob([JSON.stringify(all)]), 'application/json');
+    } catch { /* no write access to the folder: visits just aren't logged */ }
+  }
+}
+async function readVisitFile(d: VisitFile): Promise<Visit[]> {
+  const f = await findFile(d.folderId, visitName(d), 'application/json');
+  if (!f) return [];
+  const v = await api('GET', `/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`);
+  return Array.isArray(v) ? v : [];
+}
+export async function readVisits(s: State): Promise<Visit[]> {
+  const d = s.config.drive;
+  if (!d?.folderId || !driveSignedIn()) return [];
+  return [...(await readVisitFile(d)), ...visitQueue.filter((x) => x.d.folderId === d.folderId).map((x) => x.v)];
+}

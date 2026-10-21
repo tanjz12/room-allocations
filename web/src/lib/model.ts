@@ -1,3 +1,4 @@
+import type { Activity } from './activity';
 import { useEffect, useState } from 'react';
 import { evaluate } from './formula';
 
@@ -28,7 +29,7 @@ export type Block = { id: string; roomId: string; eventId: string; signName?: st
 export type CapType = { id: string; name: string; formulas: Record<string, string>; /** Set (even to null) by the data package to show "Min to add" for this type. */ addMin?: number | null };
 /** `eventIds` / `eventGroups`: count only rooms with one of these events (or an event in one of these groups) scheduled. */
 export type SummaryTotal = { id: string; label: string; tagId: string; capType: string; eventIds?: string[]; eventGroups?: string[] };
-export type State = { rooms: Room[]; events: EventT[]; categories: Category[]; typeTags: Record<string, string[]>; mapColors: MapColors; blocks: Block[]; capTypes: CapType[]; phases: Phase[]; summaryTotals: SummaryTotal[]; projectedIndiv?: number; config: Config; version?: number };
+export type State = { rooms: Room[]; events: EventT[]; categories: Category[]; typeTags: Record<string, string[]>; mapColors: MapColors; blocks: Block[]; capTypes: CapType[]; phases: Phase[]; summaryTotals: SummaryTotal[]; projectedIndiv?: number; config: Config; version?: number; activity?: Activity[] };
 
 export const DAY_START = 7 * 60;
 export const DAY_END = 20 * 60;
@@ -111,6 +112,7 @@ export function normalize(s: Partial<State>): State {
   const out: State = { ...d, ...s, config: { ...emptyConfig(), ...(s.config ?? {}) }, mapColors: { ...DEFAULT_MAP_COLORS, ...(s.mapColors ?? {}) } } as State;
   for (const k of ['rooms', 'events', 'categories', 'blocks', 'capTypes', 'phases', 'summaryTotals'] as const) if (!Array.isArray(out[k])) (out as Record<string, unknown>)[k] = [];
   out.typeTags ??= {};
+  if (!Array.isArray(out.activity)) out.activity = [];
   const cfg = out.config as Config & { mapGroupColor?: { group: string; color: string }; mapGroupColors?: { group: string; color: string }[] };
   const oldGc = [...(cfg.mapGroupColor ? [cfg.mapGroupColor] : []), ...(cfg.mapGroupColors ?? [])].filter((g) => g.group);
   if (oldGc.length && !cfg.sameColors?.length) cfg.sameColors = oldGc.map((g, i) => ({ id: `sc${i + 1}`, name: '', color: g.color, groups: [g.group], eventIds: [] }));

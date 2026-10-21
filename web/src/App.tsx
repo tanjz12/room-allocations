@@ -8,7 +8,9 @@ import RoomsView, { type SavePage } from './views/RoomsView';
 import MapView from './views/MapView';
 import ExportView from './views/ExportView';
 import { ConfirmButton } from './views/common';
-import { driveAccount, finishSignIn, fmtSaved, signInDrive, loadDrive, pickPackage, readMeta, saveDrive, signOutDrive, writeMeta, type SyncMeta } from './lib/drive';
+import { describe, record, snapshot } from './lib/activity';
+import ActivityLog from './views/ActivityLog';
+import { driveAccount, logVisit, finishSignIn, fmtSaved, signInDrive, loadDrive, pickPackage, readMeta, saveDrive, signOutDrive, writeMeta, type SyncMeta } from './lib/drive';
 import Privacy from './views/Privacy';
 import { packageFile, packageText, readPackage } from './lib/package';
 
@@ -26,15 +28,28 @@ export default function App() {
   const metaRef = useRef(meta);
   const setMeta = (m: SyncMeta) => { metaRef.current = m; writeMeta(m); setMetaState(m); };
   const markDirty = () => { if (!metaRef.current.dirty) setMeta({ ...metaRef.current, dirty: true }); };
-  const edit: typeof update = (fn) => { update(fn); markDirty(); };
+  const edit: typeof update = (fn) => { const by = driveAccount() || 'this browser'; update((d) => { const before = snapshot(d); fn(d); record(d, describe(before, snapshot(d)), by); }); markDirty(); };
+  const [showActivity, setShowActivity] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+  const folderId = state.config.drive?.folderId, jsonName = state.config.drive?.jsonName;
+  useEffect(() => {
+    const m = mainRef.current;
+    if (!m) return;
+    const ro = new ResizeObserver(() => m.style.setProperty('--main-w', `${m.clientWidth}px`));
+    ro.observe(m);
+    return () => ro.disconnect();
+  }, []);
 
   const applyDrive = (s: State, savedAt: string) => {
     // Files saved by older versions of the app carry no package settings; keep the open package's.
-    setState(normalize(s.config ? s : { ...s, config: state.config }));
+    const next = normalize(s.config ? s : { ...s, config: state.config });
+    setState(next);
     setMeta({ savedAt, dirty: false });
+    logVisit(next.config.drive, 'opened the package');
     setDrive({});
   };
   const [account, setAccount] = useState(driveAccount);
+  useEffect(() => { if (folderId && jsonName) logVisit({ folderId, jsonName }, `viewed ${tab}`); }, [tab, folderId, jsonName, account]);
   const fail = (e: unknown) => setDrive({ err: `Drive: ${e instanceof Error ? e.message : e}` });
   const loadFromDrive = async () => {
     setDrive({ busy: 'Loading…' });
@@ -54,7 +69,7 @@ export default function App() {
       else {
         const sheetId = r.sheetId;
         if (sheetId && sheetId !== state.config.drive?.sheetId) setState((x) => (x.config.drive ? { ...x, config: { ...x.config, drive: { ...x.config.drive, sheetId } } } : x));
-        setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {}); }
+        setMeta({ savedAt: r.savedAt, dirty: false }); setDrive(r.sheetErr ? { err: `Saved the JSON, but the Sheet wasn't updated: ${r.sheetErr}` } : {}); logVisit(state.config.drive, 'saved to Drive'); }
     } catch (e) { fail(e); }
   };
   const stateRef = useRef(state);
@@ -196,6 +211,7 @@ export default function App() {
               {linked && openButton(true)}
               <button onClick={() => { setLoadErr(''); fileRef.current?.click(); }}>Open data package…</button>
               <button onClick={() => void exportPackage()}>Export data package</button>
+              <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); setShowActivity(true); }}>Activity log</button>
               <hr className="menu-sep" />
               <ConfirmButton label="Clear all data" word="clear" className="danger" onConfirm={clearAll} />
               <hr className="menu-sep" />
@@ -206,7 +222,8 @@ export default function App() {
           <input ref={fileRef} type="file" accept=".json,.gz,application/json,application/gzip" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void importPackage(f); }} />
         </div>
       </header>
-      <main>
+      {showActivity && <ActivityLog state={state} onClose={() => setShowActivity(false)} />}
+      <main ref={mainRef}>
         {tab === 'Schedule' && <Schedule {...props} />}
         {tab === 'Capacity breakdown' && <CapacityView {...props} />}
         {tab === 'Floor plans' && <MapView {...props} />}
