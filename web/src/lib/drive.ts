@@ -419,6 +419,7 @@ export async function saveMaps(folder: DriveFolder, files: { dir: string; name: 
 export type Visit = { at: string; by: string; text: string };
 const LOG_APP = 'https://script.google.com/macros/s/';
 let visitQueue: { url: string; v: Visit }[] = [];
+let visitsSending: { url: string; v: Visit }[] = [];
 let visitTimer: ReturnType<typeof setTimeout> | undefined;
 const lastVisit = new Map<string, number>();
 async function callLog(url: string, visits: Visit[]): Promise<Visit[]> {
@@ -439,12 +440,30 @@ export function logVisit(url: string | undefined, text: string) {
 }
 async function flushVisits() {
   const q = visitQueue; visitQueue = [];
+  visitsSending = [...visitsSending, ...q];
   for (const url of new Set(q.map((x) => x.url))) {
-    try { await callLog(url, q.filter((x) => x.url === url).map((x) => x.v)); } catch { /* visits just aren't logged */ }
+    try { cacheVisits(url, await callLog(url, q.filter((x) => x.url === url).map((x) => x.v))); } catch { /* visits just aren't logged */ }
   }
+  visitsSending = visitsSending.filter((x) => !q.includes(x));
 }
-export async function readVisits(s: State): Promise<Visit[]> {
-  const url = s.config.visitLog;
-  if (!url || !driveSignedIn()) return [];
-  return [...(await callLog(url, [])), ...visitQueue.filter((x) => x.url === url).map((x) => x.v)];
+const visitCacheKey = (url: string) => `room-alloc-visits:${url}`;
+const queued = (url: string) => [...visitsSending, ...visitQueue].filter((x) => x.url === url).map((x) => x.v);
+/** Adds this browser's unsent visits to the log's, skipping any the log already has. */
+function withQueued(url: string, log: Visit[]): Visit[] {
+  const have = new Set(log.map((v) => `${v.at}|${v.text}`));
+  return [...log, ...queued(url).filter((v) => !have.has(`${v.at}|${v.text}`))];
+}
+function cacheVisits(url: string, all: Visit[]) {
+  try { localStorage.setItem(visitCacheKey(url), JSON.stringify(all.slice(-1000))); } catch { /* storage full */ }
+}
+/** The visits this browser last got from the log, plus its own not-yet-sent ones, for showing while the log loads. */
+export function cachedVisits(url: string): Visit[] {
+  let saved: Visit[] = [];
+  try { saved = JSON.parse(localStorage.getItem(visitCacheKey(url)) || '[]'); } catch { /* none */ }
+  return withQueued(url, saved);
+}
+export async function readVisits(url: string): Promise<Visit[]> {
+  const all = await callLog(url, []);
+  cacheVisits(url, all);
+  return withQueued(url, all);
 }
