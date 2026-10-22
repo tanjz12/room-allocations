@@ -18,7 +18,7 @@ function signOut() {
   if (onMsg) removeEventListener('message', onMsg);
   onMsg = null;
   const frame = $('sim') as HTMLIFrameElement;
-  frame.style.display = 'none'; frame.srcdoc = ''; $('gate').style.display = '';
+  frame.onload = null; frame.style.display = 'none'; frame.style.visibility = ''; frame.srcdoc = ''; $('gate').style.display = '';
   gate(INTRO, [['Sign in with Google', () => void signInDrive()]]);
 }
 const OUT: [string, () => void] = ['Sign out', signOut];
@@ -80,7 +80,9 @@ async function open() {
       } catch (err) { reply({ ok: false, error: (err as Error).message }); }
     };
     addEventListener('message', onMsg);
-    frame.srcdoc = doctype + inject + src.slice(doctype.length); frame.style.display = 'block'; $('gate').style.display = 'none';
+    frame.style.visibility = 'hidden'; frame.style.display = 'block';
+    frame.onload = () => { frame.onload = null; frame.style.visibility = ''; $('gate').style.display = 'none'; };
+    frame.srcdoc = doctype + inject + src.slice(doctype.length);
   } catch (err) {
     gate((err as Error).message, [['Try again', () => void open()], ['Open Google file picker', () => void pick()], OUT]);
   }
