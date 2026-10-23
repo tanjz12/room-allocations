@@ -24,7 +24,9 @@ function signOut() {
 const OUT: [string, () => void] = ['Sign out', signOut];
 const INTRO = 'Sign in with Google so saved runs are kept in Drive and\ncan be reused next time.';
 
-function gate(msg: string, buttons: [string, () => void][]) {
+/** `hold` keeps the message and button rows at their current height so nothing on the page moves while loading. */
+function gate(msg: string, buttons: [string, () => void][], hold = false) {
+  for (const id of ['msg', 'btns']) $(id).style.minHeight = hold ? $(id).offsetHeight + 'px' : '';
   $('msg').textContent = msg;
   $('btns').replaceChildren(...buttons.map(([label, on]) => {
     const b = document.createElement('button'); b.textContent = label; b.onclick = on; return b;
@@ -50,7 +52,7 @@ async function pick() {
 async function open() {
   const saved = JSON.parse(localStorage.getItem(FILE_KEY) ?? 'null') as { id: string; name: string } | null;
   if (!saved) return gate(`Signed in as ${driveAccount()}. `, [['Open Google file picker', () => void pick()], OUT]);
-  gate(`Loading ${saved.name}…`, []);
+  gate(`Loading ${saved.name}…`, [], true);
   try {
     let file = await meta(saved.id);
     const { page: src, runs } = split(await text(file.id));
