@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guts room</title>
 <style>@font-face{font-family:"IBM Plex Sans";src:url(fonts/IBMPlexSansVar-Roman.woff2) format("woff2");font-weight:100 700}</style>
-<style>html,body{margin:0;height:100%;background:#fff;overflow:hidden;font-family:"IBM Plex Sans",Arial,sans-serif}#s{position:absolute;inset:0}#m{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;color:#4b5563}</style></head>
-<body><div id="s"></div><div id="m">Loading…</div>
+<style>html,body{margin:0;height:100%;background:#fff;overflow:hidden;font-family:"IBM Plex Sans",Arial,sans-serif}#s{position:absolute;inset:0}#m{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;color:#4b5563}#c{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:4px;padding:4px 6px;border-radius:999px;background:rgba(17,24,39,.55);opacity:0;transition:opacity .4s;pointer-events:none}#c.on{opacity:1;pointer-events:auto}#c button{border:0;background:transparent;color:#fff;font-size:18px;width:38px;height:32px;border-radius:999px;cursor:pointer;font-family:inherit}#c button:hover{background:rgba(255,255,255,.18)}body.idle{cursor:none}</style></head>
+<body><div id="s"></div><div id="m">Loading…</div><div id="c" hidden><button id="cp" title="Previous (←)" aria-label="Previous">&#x2039;</button><button id="cz" title="Pause (space)" aria-label="Pause">&#x275A;&#x275A;</button><button id="cn" title="Next (→)" aria-label="Next">&#x203A;</button></div>
 <script>// Projector presentation renderer (shared by the simulator preview and the public present.html page).
 // GPRESENT(el, {snap, ids, style, tick}) draws one 1920x1080 SVG into el.
 (function(){
@@ -77,11 +77,11 @@ const STYLES={
   region:{label:'Colored region',desc:'Seats filled with their station color, dashed lines between stations, letter tiles with team numbers in the side margins.'},
   table:{label:'Colored table',desc:'Seats filled with their station color; smaller map in the middle with a table of letter tiles and team numbers on each side.'},
   roster:{label:'Roster + map',desc:'Fixed map with every station list beside it. Nothing moves.'},
-  spotlight:{label:'Highlight: lit only',desc:'Zone finder map. First every station list, then a few stations at a time: only their lists are shown, very large; the other lists are hidden until their step.'},
+  spotlight:{label:'Groups only',desc:'First every station list (overview), then one group of stations at a time: only that group\u2019s lists are shown, very large; the other lists are hidden until their turn.'},
   roster2:{label:'Roster + map 2',desc:'New style in progress; starts as a copy of Roster + map.'},
   lists:{label:'Big lists',desc:'Large team numbers in station columns, with a smaller map in the corner.'},
-  finder:{label:'Highlight: same size',desc:'New: dark header with the steps, map with big letters, colored station cards. A highlight moves through the stations one at a time; every ID stays visible.'},
-  ovspot:{label:'Highlight: enlarge',desc:'New: Zone finder map. First every station list at the same size, then a few stations at a time get large lists while the other lists stay visible in small text.'},
+  finder:{label:'All IDs visible',desc:'Dark header with the steps, map with big letters, colored station cards. The highlight moves through the station groups one group at a time; every card stays the same size and every ID stays visible.'},
+  ovspot:{label:'Enlarged',desc:'First every station list at the same size (overview), then one group of stations at a time gets large lists while the other lists stay visible in small text.'},
 };
 
 function zoneLines(S,T){ // dashed boundaries: seat-to-seat midpoint segments between neighbouring seats of different stations
@@ -246,7 +246,7 @@ function drawFinder(S,ids,lite,opt){ const Z=S.zones, n=Z.length, HB=150, F_=JSO
 function render(el,d){ if(d.style==='golden'&&window.GGOLD){ const key=JSON.stringify([d.snap,d.ids]); if(el.__gk===key&&el.__gstop) return; if(el.__gstop) el.__gstop(); el.__gk=key; el.__gstop=GGOLD.start(el,d); return; } if(el.__gstop){ el.__gstop(); el.__gstop=null; el.__gk=null; } const S=d.snap, ids=d.ids||{}, st=STYLES[d.style]?d.style:d.style==='finderL'?'finder':'roster', Z=S.zones, n=Z.length; let act=null;
   if(el.__gstop){ el.__gstop(); el.__gstop=null; el.__gk=null; }
   if(st!=='finder'&&st!=='finderL'&&st!=='ovspot'&&st!=='spotlight') el.__fh=null;
-  if(st==='finder'||st==='finderL'||st==='ovspot'||st==='spotlight'){ const ZPAL={A:'#e11d48',B:'#16a34a',C:'#9333ea',D:'#eab308',E:'#eab308',F:'#2563eb',G:'#f472b6',H:'#92400e',J:'#06b6d4',K:'#1e3a8a',L:'#84cc16',M:'#64748b',N:'#c026d3',O:'#f97316',P:'#0d9488',Q:'#111827'}, SF={...S,zones:S.zones.map(([L,c])=>[L,ZPAL[L]||c]),labels:S.labels||[],per:+d.per||0,ov:+d.ov||0}, R=st==='ovspot'||st==='spotlight'?drawOvSpot(SF,ids,st==='spotlight'):drawFinder(SF,ids,st==='finderL'), html=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}${R.css}</style>${R.body}</svg>`; if(el.__fh===html) return; el.__fh=html; el.innerHTML=html; return; }
+  if(st==='finder'||st==='finderL'||st==='ovspot'||st==='spotlight'){ const ZPAL={A:'#e11d48',B:'#16a34a',C:'#9333ea',D:'#f97316',E:'#f97316',F:'#2563eb',G:'#f472b6',H:'#92400e',J:'#06b6d4',K:'#1e3a8a',L:'#84cc16',M:'#64748b',N:'#c026d3',O:'#eab308',P:'#0d9488',Q:'#111827'}, SF={...S,zones:S.zones.map(([L,c])=>[L,ZPAL[L]||c]),labels:S.labels||[],per:+d.per||0,ov:+d.ov||0}, R=st==='ovspot'||st==='spotlight'?drawOvSpot(SF,ids,st==='spotlight'):drawFinder(SF,ids,st==='finderL'), html=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}${R.css}</style>${R.body}</svg>`; if(el.__fh===html) return; el.__fh=html; el.innerHTML=html; return; }
   const svgOpen=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}</style><rect width="${W}" height="${H}" fill="#fff"/>`;
   if(st==='classic'||st==='region'){ el.innerHTML=svgOpen+drawClassic(S,ids,st==='classic'?'c25':'cm')+'</svg>'; return; }
   if(st==='table'){ el.innerHTML=svgOpen+drawTable(S,ids)+'</svg>'; return; }
@@ -458,10 +458,23 @@ window.GGOLD={start};
 (()=>{ const U='https://script.google.com/macros/s/AKfycbyTQjbUROQgiJks63CmJ9FSFQnR8UdsgsvssUTI68L8jQKRvBs2CvEc8CmnEXk-DX5ntw/exec', q=new URLSearchParams(location.search), room=(q.get('room')||'').toLowerCase(), k=q.get('k')||'', el=document.getElementById('s'), msg=document.getElementById('m'); let T=null;
   async function poll(){ try{ const r=await fetch(U+'?room='+encodeURIComponent(room)+'&k='+encodeURIComponent(k)+(T?'&t='+T:''),{cache:'no-store'}), j=await r.json();
       if(!j.ok){ msg.style.display='flex'; msg.textContent=j.error||'Not available.'; el.innerHTML=''; T=null; }
-      else if(!j.same){ const D=j.data; if(D&&D.snap){ T=D.t; msg.style.display='none'; GPRESENT.render(el,{snap:D.snap,ids:D.ids||{},style:D.style,per:D.per||5,ov:D.ov||0,tick:0}); } else { msg.style.display='flex'; msg.textContent='Nothing has been applied for this room yet.'; } } }
+      else if(!j.same){ const D=j.data; if(D&&D.snap){ T=D.t; msg.style.display='none'; GPRESENT.render(el,{snap:D.snap,ids:D.ids||{},style:D.style,per:D.per||5,ov:D.ov||0,tick:0}); CUR=D; requestAnimationFrame(()=>{ if(paused) anims().forEach(a=>a.pause()); ctlShow(); }); } else { msg.style.display='flex'; msg.textContent='Nothing has been applied for this room yet.'; } } }
     catch(e){ if(T===null) msg.textContent='Can\u2019t reach the server. Retrying\u2026'; }
     setTimeout(poll,3000); }
   if(!/^[a-z0-9]{2,12}$/.test(room)||!k) msg.textContent='This link is incomplete. Copy the room link from the simulator.'; else poll();
+  let CUR=null, paused=false, hideT=0; const C=document.getElementById('c'), bz=document.getElementById('cz');
+  const anims=()=>el.getAnimations?el.getAnimations({subtree:true}):[], loopA=()=>anims().filter(a=>a.effect&&a.effect.getTiming().iterations===Infinity);
+  const ctlOk=()=>CUR&&CUR.style!=='golden'&&loopA().length>0, ctlShow=()=>{ C.hidden=!ctlOk(); };
+  const bounds=()=>{ const L=loopA(); const cyc=Math.max(...L.map(a=>+a.effect.getTiming().duration||0))/1000, per=+CUR.per||5, ov=(CUR.style==='ovspot'||CUR.style==='spotlight')?((+CUR.ov>0)?+CUR.ov:Math.round(per*16)/10):0, b=[0]; for(let t=ov||per;t<cyc-0.05;t+=per) b.push(t); return {cyc,b,ref:L[0]}; };
+  function step(dir){ if(!ctlOk()) return; const {cyc,b,ref}=bounds(); if(!(cyc>0)) return; const pos=((ref.currentTime||0)/1000)%cyc; let i=b.length-1; while(i>0&&b[i]>pos+1e-6) i--; let tgt;
+    if(dir>0) tgt=i+1<b.length?b[i+1]:cyc; else tgt=(pos-b[i]>0.8)?b[i]:(i>0?b[i-1]:b[b.length-1]-cyc);
+    const dt=(tgt-pos+0.01)*1000; anims().forEach(a=>{ if(a.currentTime!=null) a.currentTime=a.currentTime+dt; }); }
+  function pause(v){ paused=v; anims().forEach(a=>v?a.pause():a.play()); bz.innerHTML=v?'&#x25B6;':'&#x275A;&#x275A;'; bz.title=v?'Play (space)':'Pause (space)'; bz.setAttribute('aria-label',v?'Play':'Pause'); }
+  const wake=()=>{ document.body.classList.remove('idle'); if(!C.hidden) C.classList.add('on'); clearTimeout(hideT); hideT=setTimeout(()=>{ if(!C.matches(':hover')){ C.classList.remove('on'); document.body.classList.add('idle'); } },2500); };
+  document.addEventListener('mousemove',wake); document.addEventListener('touchstart',wake,{passive:true});
+  document.getElementById('cp').onclick=e=>{ e.stopPropagation(); step(-1); wake(); }; document.getElementById('cn').onclick=e=>{ e.stopPropagation(); step(1); wake(); }; bz.onclick=e=>{ e.stopPropagation(); pause(!paused); wake(); };
+  C.addEventListener('dblclick',e=>e.stopPropagation()); C.addEventListener('mouseleave',wake);
+  document.addEventListener('keydown',e=>{ if(!ctlOk()) return; if(e.key==='ArrowRight'||e.key==='PageDown'){ step(1); e.preventDefault(); } else if(e.key==='ArrowLeft'||e.key==='PageUp'){ step(-1); e.preventDefault(); } else if(e.key===' '){ pause(!paused); e.preventDefault(); } });
   document.addEventListener('dblclick',()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen(); });
 })();
 </script></body></html>
