@@ -11,6 +11,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         gutsSim: resolve(__dirname, 'guts-sim.html'),
+        present: resolve(__dirname, 'present.html'),
       },
     },
   },
