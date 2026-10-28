@@ -14,15 +14,24 @@ function wrap(ids,F,w){ const rows=[]; let r=[], x=0; for(const t of ids){ const
 // Flow cards (badge + wrapped IDs) into columns inside box; returns null if they don't all fit at font F
 function flow(Z,ids,F,box,cols){ return flowM(Z,ids,F,[box],[cols]); }
 // Flow cards into one or more boxes (each with its own column count, 0 = unused); null if any card does not fit at font F
+let FLOWG=null, FLOWO=null;
 function flowM(Z,ids,F,boxes,colsA){ const B=Math.max(48,Math.round(F*1.15)), pad=Math.round(F*0.35), lh=F*1.25, out=[], bs=boxes.map((b,i)=>({b,n:colsA[i],cw:colsA[i]?(b.w-(colsA[i]-1)*24)/colsA[i]:0})).filter(q=>q.n>0&&q.cw>0);
   if(!bs.length) return null; let bi=0, c=0, y=bs[0].b.y;
   const meas=(L_ids,q)=>{ const iw=q.cw-B-pad*3; if(iw<=0) return null; const rows=wrap(L_ids,F,iw); if(rows.some(r=>r.length===1&&r[0].length*DW*F>iw)) return null; return {rows,h:Math.max(B,rows.length*lh)+pad*2}; };
-  for(const [L] of Z){ const L_ids=ids[L]&&ids[L].length?ids[L]:['\u2014']; let m=meas(L_ids,bs[bi]);
-    while(!m||y+m.h>bs[bi].b.y+bs[bi].b.h){ c++; if(c>=bs[bi].n){ bi++; c=0; if(bi>=bs.length) return null; } y=bs[bi].b.y; m=meas(L_ids,bs[bi]); if(m&&y+m.h>bs[bi].b.y+bs[bi].b.h&&c===bs[bi].n-1&&bi===bs.length-1) return null; }
+  const Zs=Z.map(z=>z[0]);
+  for(const [L] of Z){ const L_ids=ids[L]&&ids[L].length?ids[L]:['\u2014']; let m=meas(L_ids,bs[bi]), brk=false;
+    const g=FLOWG&&FLOWG.find(q=>q.includes(L)), mem=g?g.filter(x=>Zs.includes(x)):[]; if(mem.length>1&&mem[0]===L&&y>bs[bi].b.y){ let tot=-16; for(const x of mem){ const mm=meas(ids[x]&&ids[x].length?ids[x]:['\u2014'],bs[bi]); if(!mm){ tot=1e9; break; } tot+=mm.h+16; } brk=y+tot>bs[bi].b.y+bs[bi].b.h; }
+    while(brk||!m||y+m.h>bs[bi].b.y+bs[bi].b.h){ brk=false; c++; if(c>=bs[bi].n){ bi++; c=0; if(bi>=bs.length) return null; } y=bs[bi].b.y; m=meas(L_ids,bs[bi]); if(m&&y+m.h>bs[bi].b.y+bs[bi].b.h&&c===bs[bi].n-1&&bi===bs.length-1) return null; }
     const q=bs[bi]; out.push({L,x:q.b.x+c*(q.cw+24),y,w:q.cw,h:m.h,B,pad,rows:m.rows,lh,F}); y+=m.h+16; }
   return out; }
-function bestFlowM(Z,ids,boxes,Fmax){ const combos=[]; const rec=(i,a)=>{ if(i===boxes.length){ if(a.some(v=>v>0)) combos.push(a); return; } for(let n=0;n<=6;n++) rec(i+1,a.concat(n)); }; rec(0,[]);
-  for(let F=Fmax;F>=12;F--) for(const cA of combos){ const f=flowM(Z,ids,F,boxes,cA); if(f) return f; } return flow(Z,ids,12,boxes[0],8)||[]; }
+function bestFlowM(Z,ids,boxes,Fmax,fix){ const combos=[]; const rec=(i,a)=>{ if(i===boxes.length){ if(a.some(v=>v>0)) combos.push(a); return; } for(let n=0;n<=6;n++) rec(i+1,a.concat(n)); }; rec(0,[]); if(fix) combos.splice(0,combos.length,fix);
+  const G0=FLOWG; FLOWG=null; let r=null, F0=0; for(let F=Fmax;F>=12&&!r;F--) for(const cA of combos){ const f=flowM(Z,ids,F,boxes,cA); if(f){ r=f; F0=F; break; } } FLOWG=G0;
+  if(r&&G0) for(let F=Fmax;F>=F0;F--) for(const cA of combos){ const f=flowM(Z,ids,F,boxes,cA); if(f) return snakeR(f); }
+  return snakeR(r||flow(Z,ids,12,boxes[0],8)||[]); }
+function snakeR(cards){ if(FLOWO!=='snakeR'||cards.length<4) return cards; const xs=[...new Set(cards.map(c=>Math.round(c.x)))], cols=xs.map(x=>cards.filter(c=>Math.round(c.x)===x)).filter(c=>c.length>1).sort((a,b)=>b[0].x-a[0].x), inCol=new Set(cols.flat()), slots=[];
+  cols.forEach((c,i)=>{ c.sort((a,b)=>a.y-b.y); slots.push(...(i%2?c.slice().reverse():c)); });
+  let rest=cards.filter(c=>!inCol.has(c)); while(rest.length){ const p=slots[slots.length-1], d=c=>p?Math.hypot(c.x+c.w/2-p.x-p.w/2,c.y+c.h/2-p.y-p.h/2):c.x; rest.sort((a,b)=>d(a)-d(b)); slots.push(rest.shift()); }
+  const ord=cards.slice().sort((a,b)=>cards.indexOf(a)-cards.indexOf(b)); return ord.map((c,i)=>({...c,x:slots[i].x,y:slots[i].y})); }
 function bestFlow(Z,ids,box,Fmax,Fmin){ return bestFlowM(Z,ids,[box],Fmax); }
 function mapFit(S,box){ const [vx,vy,vw,vh]=S.vb, k=Math.min(box.w/vw,box.h/vh); return {k,ox:box.x+(box.w-vw*k)/2-vx*k,oy:box.y+(box.h-vh*k)/2-vy*k}; }
 function badgeSpots(S,T,size){ // zone letter positions: center of each zone (its centroid if that spot belongs to the zone, else the zone seat nearest it)
@@ -37,6 +46,13 @@ function badgeSpots(S,T,size){ // zone letter positions: center of each zone (it
     const segs=(S.blines||[]).flatMap(Ln=>Ln.slice(1).map((q,j)=>[T.ox+Ln[j][0]*T.k,T.oy+Ln[j][1]*T.k,T.ox+q[0]*T.k,T.oy+q[1]*T.k])), dsg=(q,g)=>{ const dx=g[2]-g[0], dy=g[3]-g[1], l2=dx*dx+dy*dy, t=l2?Math.max(0,Math.min(1,((q[0]-g[0])*dx+(q[1]-g[1])*dy)/l2)):0; return Math.hypot(q[0]-g[0]-t*dx,q[1]-g[1]-t*dy); }, clr=q=>segs.length?Math.min(...segs.map(g=>dsg(q,g))):1e9, need=size*0.72+10;
     const ok=cand.filter((q,i)=>(i>0||own(q[0],q[1])===zi)&&free(q)), best=ok.find(q=>clr(q)>=need)||ok.slice().sort((u,v)=>clr(v)-clr(u))[0]||cand[1]; used.push(best); out[L]=best; });
   return out; }
+// Station letter on its proctor pair: pair up proctor seats (nearest proctor), then give each station the closest unused pair (screen coords)
+function procSpots(S,T){ const P=S.seats.filter(e=>e[5]===1).map(e=>[e[0]+e[2]/2,e[1]+e[3]/2,e[4]]), pr=[], used=new Set(), out={};
+  P.forEach((p,i)=>{ if(used.has(i)) return; let b=-1, bd=Infinity; P.forEach((q,j)=>{ if(j===i||used.has(j)) return; const d=Math.hypot(p[0]-q[0],p[1]-q[1]); if(d<bd){ bd=d; b=j; } }); used.add(i); const m=[p]; if(b>=0&&bd<S.seatSize*3){ used.add(b); m.push(P[b]); } pr.push({x:m.reduce((a,q)=>a+q[0],0)/m.length,y:m.reduce((a,q)=>a+q[1],0)/m.length,zi:m.find(q=>q[2]>=0)?m.find(q=>q[2]>=0)[2]:-1}); });
+  const ss=S.seats.filter(e=>e[5]!==1&&e[4]>=0), cand=[];
+  pr.forEach((p,pi)=>S.zones.forEach((z,zi)=>{ const d=p.zi>=0?(p.zi===zi?0:1e9):Math.min(...ss.filter(e=>e[4]===zi).map(e=>Math.hypot(e[0]+e[2]/2-p.x,e[1]+e[3]/2-p.y)),1e9); if(d<1e9) cand.push([d,pi,zi]); }));
+  const up=new Set(), uz=new Set(); cand.sort((a,b)=>a[0]-b[0]).forEach(([d,pi,zi])=>{ if(up.has(pi)||uz.has(zi)) return; up.add(pi); uz.add(zi); out[S.zones[zi][0]]=[T.ox+pr[pi].x*T.k,T.oy+pr[pi].y*T.k]; });
+  return out; }
 function drawMap(S,T,o){ if(/Pauley/.test(S.title)) S={...S,deco:String(S.deco||'').replace(/<rect [^>]*height="\d(\.\d+)?"[^>]*\/>/g,'')}; const act=o.active, B=[]; const tr=`transform="translate(${T.ox.toFixed(1)},${T.oy.toFixed(1)}) scale(${T.k.toFixed(4)})"`;
   B.push(`<g ${tr}>${o.noTblLab?String(S.deco||'').replace(/<text [^>]*>[A-Z]\d+<\/text>/g,'').replace(/font-size="12"([^>]*)>Patio \(glass doors\)/,'font-size="22" font-weight="700"$1>Patio (glass doors)').replace(/fill="#4b5563"([^>]*>Patio)/,'fill="#1d4ed8"$1').replace(/(<text x="[-\d.]+" y=")([-\d.]+)("[^>]*>Patio)/,(m0,a,y,c)=>a+(+y-7)+c).replace(/stroke="#60a5fa" stroke-width="3"/,'stroke="#2563eb" stroke-width="9"').replace(/<text x="([-\d.]+)" y="([-\d.]+)"[^>]*>Lobby entrance<\/text>/,(m0,x,y)=>{ const cx=+x-8, cy=+y-4; return `<text x="${cx}" y="${cy-42}" font-size="22" font-weight="700" text-anchor="middle" fill="#111827" font-family=${JSON.stringify(FONT)}>Lobby</text><text x="${cx}" y="${cy-18}" font-size="22" font-weight="700" text-anchor="middle" fill="#111827" font-family=${JSON.stringify(FONT)}>entrance</text><line x1="${cx-44}" y1="${cy}" x2="${+x+34}" y2="${cy}" stroke="#111827" stroke-width="6"/><polygon points="${+x+48},${cy} ${+x+30},${cy-11} ${+x+30},${cy+11}" fill="#111827"/>`; }):(S.deco||'')}`);
   const stu=S.seats.filter(e=>e[5]===0&&e[4]>=0), near=(x,y)=>{ let b=-1,d=Infinity; for(const e of stu){ const q=Math.hypot(e[0]-x,e[1]-y); if(q<d){ d=q; b=e[4]; } } return b; };
@@ -44,7 +60,7 @@ function drawMap(S,T,o){ if(/Pauley/.test(S.title)) S={...S,deco:String(S.deco||
     const fill=o.fin&&Z&&(kd===1||kd===2)?Z[1]:kd===1?'#3b82f6':kd===2?'#fdba74':kd===3?'#ffffff':(Z?Z[1]:'#e5e7eb'), op=(kd===0||o.fin&&(kd===1||kd===2))&&Z?(dim?0.28:0.85):1, st=kd===3?' stroke="#9ca3af" stroke-dasharray="2 2"':'';
     B.push(S.shape==='circle'?`<circle cx="${x+w/2}" cy="${y+h/2}" r="${w/2}" fill="${fill}" fill-opacity="${op}"${st}/>`:`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.min(w,h)*0.2}" fill="${fill}" fill-opacity="${op}"${st}/>`); }
   for(const [x,y,t,fs] of (S.labels||[])) B.push(`<text x="${x}" y="${y}" font-size="${fs||10}" fill="${o.fin?'#b8bfc9':'#6b7280'}" text-anchor="middle" font-family=${JSON.stringify(FONT)}>${esc(t)}</text>`);
-  B.push('</g>'); const size=o.badge, sp=badgeSpots(S,T,size);
+  B.push('</g>'); const size=o.badge, sp=badgeSpots(S,T,size); if(o.procTile) Object.assign(sp,procSpots(S,T));
   const ts=o.tile||size; if(!o.noBadge) S.zones.forEach(([L,c],zi)=>{ const p=sp[L]; if(!p) return; B.push(`<rect x="${p[0]-ts/2-4}" y="${p[1]-ts/2-4}" width="${ts+8}" height="${ts+8}" rx="${ts*0.18+4}" fill="#ffffff"/>`+badge(p[0]-ts/2,p[1]-ts/2,ts,L,c,act!=null&&zi===act,size*0.62)); });
   if(S.front){ const [fx,fy]=[T.ox+S.front[0]*T.k,T.oy+S.front[1]*T.k]; B.push(o.bigFront?`<text x="${fx}" y="${fy+4}" font-size="38" font-weight="700" fill="#0f172a" text-anchor="middle" font-family=${JSON.stringify(FONT)}>Front</text>`:`<text x="${fx}" y="${fy}" font-size="26" fill="#4b5563" text-anchor="middle" font-family=${JSON.stringify(FONT)}>Front</text>`); }
   return B.join(''); }
@@ -61,6 +77,18 @@ function spotLayout(Z,ids,lit,boxes){ const gZ=Z.filter((z,i)=>lit.includes(i)),
   for(const sh of [0.5,0.55,0.6,0.65,0.7,0.75,0.8]){ if(wide){ const w1=Math.round((m.w-gap)*sh); cand.push([[{x:m.x,y:m.y,w:w1,h:m.h}],[{x:m.x+w1+gap,y:m.y,w:m.w-w1-gap,h:m.h}].concat(boxes.slice(1))]); } else { const h1=Math.round((m.h-gap)*sh); cand.push([[{x:m.x,y:m.y,w:m.w,h:h1}],[{x:m.x,y:m.y+h1+gap,w:m.w,h:m.h-h1-gap}].concat(boxes.slice(1))]); } }
   let best=null; for(const [bb,sb] of cand){ const big=bestFlowM(gZ,ids,bb,170), sm=oZ.length?bestFlowM(oZ,ids,sb,60):[]; if(big.length!==gZ.length||sm.length!==oZ.length) continue; const bF=fz(big), sF=oZ.length?fz(sm):99, sc=sF>=28?bF*1000+sF:sF; if(!best||sc>best.sc) best={sc,big,sm}; }
   return best||{big:bestFlowM(gZ,ids,[m],170),sm:[]}; }
+// Pauley only, Enlarged: 2025 column layout shifted right (full ID table always visible); each group gets shaded seats/columns and enlarged cards in the left panel
+function drawPauleyOv(S,ids){ const R=colZones(S); if(!R||!S.hlg) return null; const Z=S.zones, Wp=600, o={x0:Wp,w:W-Wp-24,noTip:true}, base=drawColumns(S,ids,R,'c25',o), g=o.g; if(!g) return null;
+  const G=S.hlg.map(q=>q.map(L=>Z.findIndex(z=>z[0]===L)).filter(i=>i>=0)).filter(q=>q.length), F_=JSON.stringify(FONT), per=S.per||5, d0=S.ov>0?S.ov:Math.round(per*1.6*10)/10, P=d0+G.length*per, fade=0.15, only=typeof window!=='undefined'&&window.OVF!=null?String(window.OVF):null;
+  const pc=t=>(Math.max(0,Math.min(P,t))/P*100).toFixed(3)+'%', kf=(name,on)=>{ const pts=[[0,0],[P,0]]; on.forEach(([a,b])=>{ pts.push([a,0],[a+fade,1],[b-fade,1],[b,0]); }); const m=new Map(); pts.sort((u,v)=>u[0]-v[0]).forEach(([t,v])=>m.set(pc(t),v)); return `@keyframes ${name}{${[...m].map(([k,v])=>`${k}{opacity:${v}}`).join('')}}`; };
+  const show=j=>only!=null?(String(j)===only?'':' style="display:none"'):` class="ovf${j}"`, css=[], fr=[], box={x:24,y:200,w:Wp-48,h:740};
+  const tip=tx(box.x,1006,26,'Sit close to your proctor!','fill="#374151"')+tx(box.x,1042,26,'It\u2019s ok to sit a bit outside your color','fill="#374151"');
+  fr.push(`<g${show(0)}>${[['Sit close to',1],['your proctor!',1],['It\u2019s ok to sit a bit',0],['outside your color',0]].map(([t,b],k)=>tx(box.x+16,430+k*72+(k>1?24:0),50,t,b?'font-weight="700" fill="#1f2937"':'fill="#4b5563"')).join('')}</g>`); css.push(kf('ovk0',[[0,d0]])+`.ovf0{opacity:0;animation:ovk0 ${P}s linear infinite}`);
+  G.forEach((lit,gi)=>{ const j=gi+1, sh=[]; const [,vy]=S.vb, y0=g.T.oy+vy*g.T.k-2, y1=Math.min(H,g.yEnd+g.F*0.3), C=g.cols, gp=C.length>1?C[1].a-C[0].b:20;
+    C.forEach((cl,k)=>{ if(!lit.includes(cl.zi)) return; const xa=k?(C[k-1].b+cl.a)/2:cl.a-gp/2, xb=k<C.length-1?(cl.b+C[k+1].a)/2:cl.b+gp/2; sh.push(`<rect x="${xa.toFixed(1)}" y="${y0.toFixed(1)}" width="${(xb-xa).toFixed(1)}" height="${(y1-y0).toFixed(1)}" fill="${Z[cl.zi][1]}" fill-opacity="0.3" style="mix-blend-mode:multiply"/>`); });
+    const cards=bestFlowM(C.filter(cl=>lit.includes(cl.zi)).map(cl=>Z[cl.zi]),ids,[box],170,[1]); fr.push(`<g${show(j)}>${sh.join('')}${tip}${cards.map(cd=>{ const c=Z[Z.findIndex(z=>z[0]===cd.L)][1]; return ovCard(cd,c,F_,false,false)+`<rect x="${cd.x+3}" y="${cd.y+3}" width="${cd.w-6}" height="${cd.h-6}" rx="12" fill="none" stroke="${c}" stroke-width="6"/>`; }).join('')}</g>`);
+    css.push(kf('ovk'+j,[[d0+gi*per,d0+(gi+1)*per]])+`.ovf${j}{opacity:0;animation:ovk${j} ${P}s linear infinite}`); });
+  return {body:`<rect width="${W}" height="${H}" fill="#ffffff"/>${base}${fr.join('')}`,css:css.join('')}; }
 function drawOvSpot(S,ids,hide){ const F_=JSON.stringify(FONT), R=drawFinder(S,ids,false,{}), Z=S.zones, G=R.groups, per=S.per||5, d0=S.ov>0?S.ov:Math.round(per*1.6*10)/10, P=d0+G.length*per, fade=0.15, only=typeof window!=='undefined'&&window.OVF!=null?String(window.OVF):null;
   const pc=t=>(Math.max(0,Math.min(P,t))/P*100).toFixed(3)+'%', kf=(name,on,offv,onv)=>{ const pts=[[0,offv],[P,offv]]; on.forEach(([a,b])=>{ pts.push([a,offv],[a+fade,onv],[b-fade,onv],[b,offv]); }); const m=new Map(); pts.sort((u,v)=>u[0]-v[0]).forEach(([t,v])=>m.set(pc(t),v)); return `@keyframes ${name}{${[...m].map(([k,v])=>`${k}{opacity:${v}}`).join('')}}`; };
   const sl=g=>[d0+g*per,d0+(g+1)*per], css=[], frames=[];
@@ -79,7 +107,6 @@ const STYLES={
   table:{label:'Colored table',desc:'Seats filled with their station color; smaller map in the middle with a table of letter tiles and team numbers on each side.'},
   roster:{label:'Roster + map',desc:'Fixed map with every station list beside it. Nothing moves.'},
   spotlight:{label:'Groups only',desc:'First every station list (overview), then one group of stations at a time: only that group\u2019s lists are shown, very large; the other lists are hidden until their turn.'},
-  roster2:{label:'Roster + map 2',desc:'New style in progress; starts as a copy of Roster + map.'},
   lists:{label:'Big lists',desc:'Large team numbers in station columns, with a smaller map in the corner.'},
   finder:{label:'All IDs visible',desc:'Dark header with the steps, map with big letters, colored station cards. The highlight moves through the station groups one group at a time; every card stays the same size and every ID stays visible.'},
   ovspot:{label:'Enlarged',desc:'First every station list at the same size (overview), then one group of stations at a time gets large lists while the other lists stay visible in small text.'},
@@ -117,7 +144,7 @@ const tx=(x,y,fs,t,at)=>`<text x="${x}" y="${y}" font-size="${fs}" font-family=$
 function colZones(S){ const Z=S.zones, r=Z.map((z,zi)=>{ const zs=S.seats.filter(s=>s[4]===zi); return zs.length?[Math.min(...zs.map(s=>s[0])),Math.max(...zs.map(s=>s[0]+s[2])),Math.min(...zs.map(s=>s[1])),Math.max(...zs.map(s=>s[1]+s[3]))]:null; });
   if(Z.length<6||r.some(q=>!q)) return null; const o=r.map((q,i)=>i).sort((a,b)=>r[a][0]-r[b][0]), [, , vy, vh]=S.vb;
   for(let k=0;k<o.length;k++){ const q=r[o[k]]; if(q[3]-q[2]<0.7*vh) return null; if(k&&r[o[k-1]][1]>q[0]) return null; } return r; }
-function drawColumns(S,ids,R,mode){ const Z=S.zones, [vx,vy,vw,vh]=S.vb, mx=x=>2*vx+vw-x, dg=digs(ids,Z), top=58, bot=12, MX0=mode==='c25'?330:300, MW=mode==='c25'?1570:1320, up=mode==='c25'?40:0, minMap=600;
+function drawColumns(S,ids,R,mode,opt){ const Z=S.zones, [vx,vy,vw,vh]=S.vb, mx=x=>2*vx+vw-x, dg=digs(ids,Z), top=58, bot=12, MX0=opt?opt.x0:mode==='c25'?330:300, MW=opt?opt.w:mode==='c25'?1570:1320, up=mode==='c25'?40:0, minMap=600;
   const mir=Object.assign({},S,{seats:S.seats.map(([x,y,w,h,zi,kd])=>[mx(x)-w,y,w,h,zi,kd]),deco:''});
   let best=null;
   for(let F=72;F>=14;F--){ const B=Math.round(F*1.35), lh=F*1.22, w=dg*DW*F, gap=GAP*F;
@@ -126,7 +153,7 @@ function drawColumns(S,ids,R,mode){ const Z=S.zones, [vx,vy,vw,vh]=S.vb, mx=x=>2
     if(!per||mh<minMap) continue; best={F,B,lh,w,gap,per,rows,mh,k}; break; }
   if(!best) return drawClassicBase(S,ids,mode||'cm');
   const {F,B,lh,w,gap,per,mh}=best, T=Object.assign({},mapFit(mir,{x:MX0,y:top,w:MW,h:mh})), out=[], sw=(2.1/T.k).toFixed(3), X=x=>T.ox+x*T.k, Y=y=>T.oy+y*T.k;
-  if(mode==='c25'){ T.oy=top+40-vy*T.k; T.ox=Math.max(380,W/2-vw*T.k/2)-vx*T.k; }
+  if(mode==='c25'){ T.oy=top+40-vy*T.k; T.ox=opt?opt.x0+(opt.w-vw*T.k)/2-vx*T.k:Math.max(380,W/2-vw*T.k/2)-vx*T.k; }
   const dec=(S.deco||'').replace(/<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)"/g,(m0,x,y,ww)=>`<rect x="${(mx(+x)-+ww).toFixed(3)}" y="${y}" width="${ww}"`);
   const G=[`<g transform="translate(${T.ox.toFixed(1)},${T.oy.toFixed(1)}) scale(${T.k.toFixed(4)})">${dec}`];
   for(const [x,y,ww,h,zi,kd] of mir.seats){ if(kd===1) G.push(`<circle cx="${x+ww/2}" cy="${y+h/2}" r="${Math.min(ww,h)*0.5}" fill="#3b82f6" stroke="#1d4ed8" stroke-width="${sw}"/>`); else { const Zc=Z[zi]; G.push(`<rect x="${x+ww*0.06}" y="${y+h*0.06}" width="${ww*0.88}" height="${h*0.88}" rx="${Math.min(ww,h)*0.15}" fill="${Zc&&kd!==3?Zc[1]:'#e5e7eb'}"/>`); } }
@@ -139,7 +166,8 @@ function drawColumns(S,ids,R,mode){ const Z=S.zones, [vx,vy,vw,vh]=S.vb, mx=x=>2
   cols.forEach(cl=>{ const [L,c]=Z[cl.zi]; out.push(badge(cl.c-B/2,yTile,B,L,c,false)); const v=(ids[L]&&ids[L].length?ids[L]:['\u2014']).map(String);
     for(let r=0;r*per<v.length;r++){ const row=v.slice(r*per,r*per+per), rw=row.length*w+(row.length-1)*gap; let x=cl.c-rw/2; row.forEach(t=>{ out.push(idTxt(x,yTile+B+12+F*0.95+r*lh,F,t)); x+=w+gap; }); } });
   const tw=S.title.split(' '); tw.forEach((t,j)=>out.push(tx(16,69+j*64,59,t,'font-weight="700" fill="#374151"')));
-  ['Sit close to your proctor!','It\u2019s ok to sit a bit','outside your color'].forEach((t,j)=>out.push(tx(16,992+j*32,25,t)));
+  if(!(opt&&opt.noTip)) ['Sit close to your proctor!','It\u2019s ok to sit a bit','outside your color'].forEach((t,j)=>out.push(tx(16,992+j*32,25,t)));
+  if(opt) opt.g={cols,yTile,yEnd,T,mir,B,F,w,gap,per};
   return out.join(''); }
 // 2025 style (mode c25) and colored region (mode cm): the 2025 slide geometry scaled from 720x405 to 1920x1080
 function drawClassic(S,ids,mode){ const R=colZones(S); if(R) return drawColumns(S,ids,R,mode); return drawClassicBase(S,ids,mode); }
@@ -206,7 +234,7 @@ window.GPLEX_CSS=PLEX_CSS;
 function alTint(S){ const P=S.seats.filter(e=>e[4]>=0&&e[5]!==3); return {...S,deco:String(S.deco||'').replace(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)" fill="#fff" stroke="#9ca3af"\/>/g,(m,cx,cy,r)=>{ let zi=-1,nd=1e9; for(const e of P){ const d=Math.hypot(e[0]+e[2]/2-cx,e[1]+e[3]/2-cy); if(d<nd){ nd=d; zi=e[4]; } } return zi<0?m:`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#${[1,3,5].map(j=>Math.round(255-(255-parseInt(S.zones[zi][1].slice(j,j+2),16))*0.45).toString(16).padStart(2,"0")).join("")}" stroke="${S.zones[zi][1]}" stroke-width="2"/>`; })}; }
 function T0F(S){ return mapFit(S,{x:0,y:0,w:1000,h:1000}); }
 const FSW=S=>S.zones.length<=4?14:S.zones.length<=10?11:8;
-function drawFinder(S,ids,lite,opt){ const Z=S.zones, n=Z.length, HB=150, F_=JSON.stringify(FONT), O=[];
+function drawFinder(S,ids,lite,opt){ FLOWO=S.corder||null; FLOWG=S.hlg&&S.hlg.flat().length===S.zones.length?S.hlg:null; const Z=S.zones, n=Z.length, HB=150, F_=JSON.stringify(FONT), O=[];
   O.push(`<rect width="${W}" height="${H}" fill="#f1f5f9"/><rect width="${W}" height="${HB}" fill="#0f172a"/>`);
   Z.forEach(([L,c],i)=>O.push(`<rect x="${(i*W/n).toFixed(1)}" y="${HB-10}" width="${(W/n+1).toFixed(1)}" height="10" fill="${c}"/>`));
   const zlF=straightLines(S,T0F(S))||tableLines(S,T0F(S));
@@ -272,21 +300,21 @@ const GGOLDX={ ok(d){ const r=GXSLUG[d.room]||d.room; return !!window.GGOLDX_SRC
     const W=f.contentWindow; if(W&&W.GX) W.GX.show(o); },
   stop(el){ if(el.__gxf){ el.__gxf.remove(); el.__gxf=null; el.__gxk=null; } } };
 if(typeof window!=='undefined') window.GGOLDX=GGOLDX;
-function render(el,d){ if((d.style==='goldx'||d.style==='goldm')&&GGOLDX.ok(d)){ GGOLDX.mount(el,d); return; } if(el.__gxf) GGOLDX.stop(el); if(d.style==='goldx'||d.style==='goldm') d={...d,style:'finder'}; if(el.__gstop){ el.__gstop(); el.__gstop=null; el.__gk=null; } const S=d.snap, ids=d.ids||{}, st=STYLES[d.style]?d.style:d.style==='finderL'?'finder':STYLES.finder?'finder':'roster', Z=S.zones, n=Z.length; let act=null;
+function render(el,d){ if((d.style==='goldx'||d.style==='goldm')&&GGOLDX.ok(d)){ GGOLDX.mount(el,d); return; } if(el.__gxf) GGOLDX.stop(el); if(d.style==='goldx'||d.style==='goldm') d={...d,style:'finder'}; if(el.__gstop){ el.__gstop(); el.__gstop=null; el.__gk=null; } FLOWG=null; FLOWO=null; const S=d.snap, ids=d.ids||{}, st=d.style==='roster2'?'roster':STYLES[d.style]?d.style:d.style==='finderL'?'finder':STYLES.finder?'finder':'roster', Z=S.zones, n=Z.length; let act=null;
   if(el.__gstop){ el.__gstop(); el.__gstop=null; el.__gk=null; }
   if(st!=='finder'&&st!=='finderL'&&st!=='ovspot'&&st!=='spotlight') el.__fh=null;
-  if(st==='finder'||st==='finderL'||st==='ovspot'||st==='spotlight'){ const ZPAL={A:'#e11d48',B:'#16a34a',C:'#9333ea',D:'#f97316',E:'#f97316',F:'#2563eb',G:'#f472b6',H:'#92400e',J:'#06b6d4',K:'#1e3a8a',L:'#84cc16',M:'#64748b',N:'#c026d3',O:'#eab308',P:'#0d9488',Q:'#111827'}, SF={...S,zones:S.zones.map(([L,c])=>[L,ZPAL[L]||c]),labels:S.labels||[],per:+d.per||0,ov:+d.ov||0}, R=st==='ovspot'||st==='spotlight'?drawOvSpot(SF,ids,st==='spotlight'):drawFinder(SF,ids,st==='finderL'), html=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}${R.css}</style>${R.body}</svg>`; if(el.__fh===html) return; el.__fh=html; el.innerHTML=html; return; }
+  if(st==='finder'||st==='finderL'||st==='ovspot'||st==='spotlight'){ const ZPAL={A:'#e11d48',B:'#16a34a',C:'#9333ea',D:'#f97316',E:'#f97316',F:'#2563eb',G:'#f472b6',H:'#92400e',J:'#06b6d4',K:'#1e3a8a',L:'#84cc16',M:'#64748b',N:'#c026d3',O:'#eab308',P:'#0d9488',Q:'#111827'}, SF={...S,zones:S.zones.map(([L,c])=>[L,ZPAL[L]||c]),labels:S.labels||[],per:+d.per||0,ov:+d.ov||0}, PO=st==='ovspot'&&/Pauley/.test(S.title)?drawPauleyOv({...S,per:+d.per||0,ov:+d.ov||0},ids):null, R=PO||(st==='ovspot'||st==='spotlight'?drawOvSpot(SF,ids,st==='spotlight'):drawFinder(SF,ids,st==='finderL')), html=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}${R.css}</style>${R.body}</svg>`; if(el.__fh===html) return; el.__fh=html; el.innerHTML=html; return; }
   const svgOpen=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}</style><rect width="${W}" height="${H}" fill="#fff"/>`;
   if(st==='classic'||st==='region'){ el.innerHTML=svgOpen+drawClassic(S,ids,st==='classic'?'c25':'cm')+'</svg>'; return; }
   if(st==='table'){ el.innerHTML=svgOpen+drawTable(S,ids)+'</svg>'; return; }
   if(st==='spotlight'&&n) act=(d.tick||0)%n;
-  const head=`<rect width="${W}" height="${H}" fill="#ffffff"/><text x="48" y="78" font-size="56" font-weight="700" fill="#1f2937" font-family=${JSON.stringify(FONT)}>${esc(S.title)}</text><text x="48" y="${st==='roster2'?124:122}" font-size="${st==='roster2'?32:28}" fill="#4b5563" font-family=${JSON.stringify(FONT)}>Find your team number, then sit in that colored area near its proctors.</text>`;
+  const head=`<rect width="${W}" height="${H}" fill="#ffffff"/><text x="48" y="78" font-size="56" font-weight="700" fill="#1f2937" font-family=${JSON.stringify(FONT)}>${esc(S.title)}</text><text x="48" y="122" font-size="28" fill="#4b5563" font-family=${JSON.stringify(FONT)}>Find your team number, then sit in that colored area near its proctors.</text>`;
   let body='';
-  if(st==='lists'){ const mb={x:W-600,y:24,w:560,h:300}, T=mapFit(S,mb), [vx,vy,vw,vh]=S.vb, mL=T.ox+vx*T.k, mB=T.oy+(vy+vh)*T.k; body=drawMap(S,T,{badge:30,active:null}); const yb=Math.max(160,mB+24), bx=[{x:48,y:160,w:mL-24-48,h:mB-160},{x:48,y:yb,w:W-96,h:H-30-yb}].filter(b=>b.w>0&&b.h>0); const cards=bestFlowM(Z,ids,bx,140); body+=drawCards(Z,cards,null); }
+  if(st==='lists'){ const mb={x:W-600,y:24,w:560,h:300}, T=mapFit(S,mb), [vx,vy,vw,vh]=S.vb, mL=T.ox+vx*T.k, mB=T.oy+(vy+vh)*T.k; body=drawMap(S,T,{badge:30,active:null,procTile:true}); const yb=Math.max(160,mB+24), bx=[{x:48,y:160,w:mL-24-48,h:mB-160},{x:48,y:yb,w:W-96,h:H-30-yb}].filter(b=>b.w>0&&b.h>0); const cards=bestFlowM(Z,ids,bx,140); body+=drawCards(Z,cards,null); }
   else { const cardsW=Math.round(W*0.42), mb={x:40,y:150,w:W-cardsW-90,h:H-190}, [vx,vy,vw,vh]=S.vb, k=mapFit(S,mb).k, mw=vw*k, mh=vh*k, T={k,ox:mb.x-vx*k,oy:mb.y-vy*k};
     const rb={x:mb.x+mw+40,y:150,w:W-30-(mb.x+mw+40),h:H-180}, yb=mb.y+mh+24, bx=[rb]; if(H-30-yb>=80) bx.push({x:mb.x,y:yb,w:mw,h:H-30-yb});
     const cards=bestFlowM(Z,ids,bx,120); if(!cards.some(c=>c.y>=yb&&c.x<rb.x)) T.oy=mb.y+(mb.h-mh)/2-vy*k;
-    body=drawMap(S,T,{badge:Math.max(44,Math.min(64,Math.round(T.k*S.seatSize*2.2))),active:act}); body+=drawCards(Z,cards,act); }
+    body=drawMap(S,T,{badge:Math.max(44,Math.min(64,Math.round(T.k*S.seatSize*2.2))),active:act,procTile:true}); body+=drawCards(Z,cards,act); }
   el.innerHTML=`<svg xmlns="${NS}" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:#fff"><style>${PLEX_CSS}</style>${head}${body}</svg>`; }
 window.GPRESENT={render,STYLES,W,H};
 })();
