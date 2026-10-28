@@ -456,10 +456,13 @@ window.GGOLD={start};
 </script>
 <script>
 (()=>{ const U='https://script.google.com/macros/s/AKfycbyTQjbUROQgiJks63CmJ9FSFQnR8UdsgsvssUTI68L8jQKRvBs2CvEc8CmnEXk-DX5ntw/exec', q=new URLSearchParams(location.search), room=(q.get('room')||'').toLowerCase(), k=q.get('k')||'', el=document.getElementById('s'), msg=document.getElementById('m'); let T=null;
-  async function poll(){ try{ const r=await fetch(U+'?room='+encodeURIComponent(room)+'&k='+encodeURIComponent(k)+(T?'&t='+T:''),{cache:'no-store'}), j=await r.json();
+  let MODE=0;
+  function jsonp(url){ return new Promise((res,rej)=>{ const cb='__gp'+Math.random().toString(36).slice(2), s=document.createElement('script'); let to; const done=()=>{ delete window[cb]; s.remove(); clearTimeout(to); }; to=setTimeout(()=>{ done(); rej(Error('backup timed out')); },15000); window[cb]=j=>{ done(); res(j); }; s.onerror=()=>{ done(); rej(Error('backup blocked')); }; s.src=url+'&cb='+cb; document.head.appendChild(s); }); }
+  async function getJ(url){ if(MODE) return jsonp(url); let e1; try{ const r=await fetch(url,{cache:'no-store'}), t=await r.text(); try{ return JSON.parse(t); }catch(_){ e1=Error('HTTP '+r.status+' '+t.slice(0,60)); } }catch(e){ e1=e; } try{ const j=await jsonp(url); MODE=1; return j; }catch(e2){ throw Error((e1.name&&e1.name!=='Error'?e1.name+': ':'')+e1.message+' / '+e2.message); } }
+  async function poll(){ try{ const j=await getJ(U+'?room='+encodeURIComponent(room)+'&k='+encodeURIComponent(k)+(T?'&t='+T:''));
       if(!j.ok){ msg.style.display='flex'; msg.textContent=j.error||'Not available.'; el.innerHTML=''; T=null; }
       else if(!j.same){ const D=j.data; if(D&&D.snap){ T=D.t; msg.style.display='none'; GPRESENT.render(el,{snap:D.snap,ids:D.ids||{},style:D.style,per:D.per||5,ov:D.ov||0,tick:0}); CUR=D; requestAnimationFrame(()=>{ if(paused) anims().forEach(a=>a.pause()); ctlShow(); }); } else { msg.style.display='flex'; msg.textContent='Nothing has been applied for this room yet.'; } } }
-    catch(e){ if(T===null) msg.textContent='Can\u2019t reach the server. Retrying\u2026'; }
+    catch(e){ if(T===null){ msg.style.display='flex'; msg.textContent='Can\u2019t reach the server. Retrying\u2026 ('+e.message+')'; } }
     setTimeout(poll,3000); }
   if(!/^[a-z0-9]{2,12}$/.test(room)||!k) msg.textContent='This link is incomplete. Copy the room link from the simulator.'; else poll();
   let CUR=null, paused=false, hideT=0; const C=document.getElementById('c'), bz=document.getElementById('cz');
