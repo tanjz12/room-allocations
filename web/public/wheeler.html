@@ -255,7 +255,7 @@ function alTint(S){ const P=S.seats.filter(e=>e[4]>=0&&e[5]!==3); return {...S,d
 function T0F(S){ return mapFit(S,{x:0,y:0,w:1000,h:1000}); }
 const FSW=S=>S.zones.length<=4?14:S.zones.length<=10?11:8;
 // Each station's region (screen coords): its seats' padded hull, split from neighbours by the dashed lines, traced as straight-edged paths.
-function zoneRegions(S,T,lines){ const st=3, k=T.k, q=S.seats.filter(e=>e[4]>=0); if(!q.length) return [];
+function zoneRegions(S,T,lines){ const st=3, k=T.k, q0=S.seats.filter(e=>e[4]>=0), q=q0.concat(S.seats.filter(e=>e[4]<0&&e[5]===3).map(e=>{ let b=-1, d=Infinity; for(const t of q0){ const h=Math.hypot(t[0]-e[0],t[1]-e[1]); if(h<d){ d=h; b=t[4]; } } return [e[0],e[1],e[2],e[3],b,e[5]]; }).filter(e=>e[4]>=0)); if(!q.length) return [];
   const ss=(S.seatSize||Math.max(q[0][2],q[0][3]))*k, pad=ss*0.75, X0=Math.min(...q.map(e=>T.ox+e[0]*k))-2*pad, Y0=Math.min(...q.map(e=>T.oy+e[1]*k))-2*pad, X1=Math.max(...q.map(e=>T.ox+(e[0]+e[2])*k))+2*pad, Y1=Math.max(...q.map(e=>T.oy+(e[1]+e[3])*k))+2*pad;
   const W=Math.ceil((X1-X0)/st), H=Math.ceil((Y1-Y0)/st), N=W*H, nz=S.zones.length, lab=new Int16Array(N).fill(-1), wall=new Uint8Array(N);
   const hull0=P=>{ P.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]), lo=[], up=[]; for(const p of P){ while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(let i=P.length-1;i>=0;i--){ const p=P[i]; while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); } return lo.slice(0,-1).concat(up.slice(0,-1)); };
@@ -267,6 +267,13 @@ function zoneRegions(S,T,lines){ const st=3, k=T.k, q=S.seats.filter(e=>e[4]>=0)
     if(/Dwinelle 145/.test(S.title)&&/^[ABCO]$/.test(S.zones[zi][0])) for(let y=c;y<=d;y++) for(let x=a;x<=b;x++) M[y*W+x]=1;
     return M; });
   const segs=[]; String(lines||'').replace(/points="([^"]+)"/g,(_,ps)=>{ const P=ps.trim().split(/\s+/).map(t=>t.split(',').map(Number)); for(let j=1;j<P.length;j++) segs.push([...P[j-1],...P[j]]); return ''; }).replace(/<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"/g,(_,a,b,c,d)=>{ segs.push([+a,+b,+c,+d]); return ''; });
+  { const seen=new Set(); for(let i=segs.length-1;i>=0;i--){ const g=segs[i].map(v=>Math.round(v)), k1=g.join(','), k2=[g[2],g[3],g[0],g[1]].join(','); if(seen.has(k1)||seen.has(k2)) segs.splice(i,1); else seen.add(k1); } }
+  { const sd=(px,py,[ax,ay,bx,by])=>{ const dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy||1e-9, t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2)); return Math.hypot(px-ax-dx*t,py-ay-dy*t); }, fr=[];
+    segs.forEach((g,gi)=>[[g[0],g[1]],[g[2],g[3]]].forEach(([x,y])=>{ if(!segs.some((h,hi)=>hi!==gi&&sd(x,y,h)<6)) fr.push([x,y,gi]); }));
+    const bt=2.6*ss, nb=[], pr=[], par=fr.map((_,i)=>i), fd=i=>par[i]===i?i:(par[i]=fd(par[i])), deg=fr.map(()=>0);
+    for(let i=0;i<fr.length;i++) for(let j=i+1;j<fr.length;j++){ const d=Math.hypot(fr[i][0]-fr[j][0],fr[i][1]-fr[j][1]); if(fr[i][2]!==fr[j][2]&&d<bt) pr.push([d,i,j]); }
+    pr.sort((u,v)=>u[0]-v[0]).forEach(([d,i,j])=>{ if(deg[i]>1||deg[j]>1||fd(i)===fd(j)) return; par[fd(i)]=fd(j); deg[i]++; deg[j]++; nb.push([fr[i][0],fr[i][1],fr[j][0],fr[j][1]]); });
+    segs.push(...nb); }
   { const sd=(px,py,[ax,ay,bx,by])=>{ const dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy||1e-9, t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2)); return Math.hypot(px-ax-dx*t,py-ay-dy*t); }, add=[];
     segs.forEach((g,gi)=>[[g[0],g[1],g[2],g[3]],[g[2],g[3],g[0],g[1]]].forEach(([ex0,ey0,ox,oy])=>{ if(segs.some((h,hi)=>hi!==gi&&sd(ex0,ey0,h)<6)) return; const L=Math.hypot(ex0-ox,ey0-oy)||1, ux=(ex0-ox)/L, uy=(ey0-oy)/L; let d=0, out=0; while(d<400&&out<4){ d+=st; const x=Math.floor((ex0+ux*d-X0)/st), y=Math.floor((ey0+uy*d-Y0)/st); out=(x<0||y<0||x>=W||y>=H||!ENV[y*W+x])?out+1:0; } if(d>st) add.push([ex0,ey0,ex0+ux*d,ey0+uy*d]); }));
     segs.push(...add); }
@@ -274,7 +281,13 @@ function zoneRegions(S,T,lines){ const st=3, k=T.k, q=S.seats.filter(e=>e[4]>=0)
   const cov=(e,f)=>{ const a=Math.max(0,Math.floor((T.ox+e[0]*k-X0)/st)), b=Math.min(W-1,Math.floor((T.ox+(e[0]+e[2])*k-X0)/st)), c=Math.max(0,Math.floor((T.oy+e[1]*k-Y0)/st)), d=Math.min(H-1,Math.floor((T.oy+(e[1]+e[3])*k-Y0)/st)); for(let y=c;y<=d;y++) for(let x=a;x<=b;x++) f(y*W+x); };
   let Q=[]; q.forEach(e=>{ const x=Math.floor((T.ox+(e[0]+e[2]/2)*k-X0)/st), y=Math.floor((T.oy+(e[1]+e[3]/2)*k-Y0)/st), i=y*W+x; if(x>=0&&y>=0&&x<W&&y<H&&!wall[i]&&lab[i]<0&&HM[e[4]][i]){ lab[i]=e[4]; Q.push(i); } });
   while(Q.length){ const nq=[]; for(const i of Q){ const x=i%W, l=lab[i]; for(const j of [x?i-1:-1,x<W-1?i+1:-1,i-W,i+W]) if(j>=0&&j<N&&lab[j]<0&&!wall[j]&&HM[l][j]){ lab[j]=l; nq.push(j); } } Q=nq; }
+  { const U=new Uint8Array(N); HM.forEach(M=>{ for(let i=0;i<N;i++) if(M[i]) U[i]=1; }); const cid=new Int32Array(N).fill(-1); let nc=0;
+    for(let i0=0;i0<N;i0++) if(U[i0]&&!wall[i0]&&cid[i0]<0){ const C=[i0]; cid[i0]=nc; for(let h=0;h<C.length;h++){ const c=C[h], x=c%W; for(const j of [x?c-1:-1,x<W-1?c+1:-1,c-W,c+W]) if(j>=0&&j<N&&U[j]&&!wall[j]&&cid[j]<0){ cid[j]=nc; C.push(j); } } nc++; }
+    const cnt=Array.from({length:nc},()=>({})); q.forEach(e=>{ const x=Math.floor((T.ox+(e[0]+e[2]/2)*k-X0)/st), y=Math.floor((T.oy+(e[1]+e[3]/2)*k-Y0)/st); if(x<0||y<0||x>=W||y>=H) return; const c=cid[y*W+x]; if(c>=0) cnt[c][e[4]]=(cnt[c][e[4]]||0)+1; });
+    const tot={}; q.forEach(e=>{ tot[e[4]]=(tot[e[4]]||0)+1; }); const own=cnt.map(o=>{ const hm=Object.keys(o).filter(z=>o[z]>0.5*tot[z]); return hm.length===1?+hm[0]:-1; });
+    for(let i=0;i<N;i++){ const c=cid[i]; if(c>=0&&own[c]>=0) lab[i]=own[c]; } }
   for(let zi=0;zi<nz;zi++){ const seen=new Uint8Array(N), comps=[]; for(let i=0;i<N;i++) if(lab[i]===zi&&!seen[i]){ const C=[i]; seen[i]=1; for(let h=0;h<C.length;h++){ const c=C[h], x=c%W; for(const j of [x?c-1:-1,x<W-1?c+1:-1,c-W,c+W]) if(j>=0&&j<N&&!seen[j]&&lab[j]===zi){ seen[j]=1; C.push(j); } } comps.push(C); } comps.sort((u,v)=>v.length-u.length).slice(1).forEach(C=>C.forEach(i=>{ lab[i]=-1; })); }
+  { const F=[]; for(let i=0;i<N;i++) if(lab[i]>=0) F.push(i); for(let h=0;h<F.length;h++){ const c=F[h], x=c%W; for(const j of [x?c-1:-1,x<W-1?c+1:-1,c-W,c+W]) if(j>=0&&j<N&&ENV[j]&&!wall[j]&&lab[j]<0){ lab[j]=lab[c]; F.push(j); } } }
   for(let pass=0;pass<2;pass++) for(let i=0;i<N;i++) if(wall[i]&&lab[i]<0){ const x=i%W; for(const j of [x?i-1:-1,x<W-1?i+1:-1,i-W,i+W]) if(j>=0&&j<N&&lab[j]>=0&&HM[lab[j]][i]){ lab[i]=lab[j]; break; } }
   const dp=(P,tol)=>{ if(P.length<3) return P; let m=0, mi=0; const [a,b]=[P[0],P[P.length-1]], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1e-9; for(let i=1;i<P.length-1;i++){ const d=Math.abs((b[0]-a[0])*(a[1]-P[i][1])-(a[0]-P[i][0])*(b[1]-a[1]))/L; if(d>m){ m=d; mi=i; } } return m>tol?dp(P.slice(0,mi+1),tol).slice(0,-1).concat(dp(P.slice(mi),tol)):[a,b]; };
   return S.zones.map((_,zi)=>{ const inn=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&lab[y*W+x]===zi, nx=new Map(), K=(x,y)=>y*(W+1)+x;
