@@ -264,7 +264,7 @@ function zoneRegions(S,T,lines){ const st=3, k=T.k, q=S.seats.filter(e=>e[4]>=0)
   { const gmax=Math.round(2.2*ss/st); for(let x=0;x<W;x++){ let last=-1; for(let y=0;y<H;y++) if(ENV[y*W+x]){ if(last>=0&&y-last>1&&y-last<=gmax) for(let t=last+1;t<y;t++) ENV[t*W+x]=1; last=y; } } }
   const HM=S.zones.map((_,zi)=>{ const M=new Uint8Array(N), zs=q.filter(e=>e[4]===zi); if(!zs.length) return M; const bp=ss*0.3/st, a=Math.max(0,Math.floor(Math.min(...zs.map(e=>(T.ox+e[0]*k-X0)/st))-bp)), b=Math.min(W-1,Math.ceil(Math.max(...zs.map(e=>(T.ox+(e[0]+e[2])*k-X0)/st))+bp)), c=Math.max(0,Math.floor(Math.min(...zs.map(e=>(T.oy+e[1]*k-Y0)/st))-bp)), d=Math.min(H-1,Math.ceil(Math.max(...zs.map(e=>(T.oy+(e[1]+e[3])*k-Y0)/st))+bp));
     for(let y=c;y<=d;y++) for(let x=a;x<=b;x++) if(ENV[y*W+x]) M[y*W+x]=1;
-    if(/Dwinelle 145/.test(S.title)&&/^[CO]$/.test(S.zones[zi][0])) for(let y=c;y<=d;y++) for(let x=a;x<=b;x++) M[y*W+x]=1;
+    if(/Dwinelle 145/.test(S.title)&&/^[ABCO]$/.test(S.zones[zi][0])) for(let y=c;y<=d;y++) for(let x=a;x<=b;x++) M[y*W+x]=1;
     return M; });
   const segs=[]; String(lines||'').replace(/points="([^"]+)"/g,(_,ps)=>{ const P=ps.trim().split(/\s+/).map(t=>t.split(',').map(Number)); for(let j=1;j<P.length;j++) segs.push([...P[j-1],...P[j]]); return ''; }).replace(/<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"/g,(_,a,b,c,d)=>{ segs.push([+a,+b,+c,+d]); return ''; });
   { const sd=(px,py,[ax,ay,bx,by])=>{ const dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy||1e-9, t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2)); return Math.hypot(px-ax-dx*t,py-ay-dy*t); }, add=[];
